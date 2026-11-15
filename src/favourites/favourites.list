@@ -1,0 +1,46 @@
+;
+;$VER: Favourites 1.1.5 (14.02.99)
+;
+;Make a list of 20 of your favourite cartridges in the saved cartridges path.
+;Place the names inside this file (favourites.list).
+;The correct format is:
+;
+;[letter (a-t)]. [name (max 31 characters)]
+;
+;eg.
+;
+;a. ZELDA.GB
+;b. CASTLEV2.GB
+;c. CONTRA_S.GB
+;
+;The amount of entries can range from one to 20.
+;
+;The names appear in the correct order in the menu list (a is the first,
+;t is the last entry).
+;
+;This format is a very strict one, so make sure the lower case letters begin
+;right in the beginning of a new line and there's one space between the
+;following dot and the entry name.
+;
+;Here's the default list.
+;
+a. BlasterMaster.GB
+b. BubbleBobble1.GB
+c. BubbleBobble2.GB
+d. Castlevania1.GB
+e. Castlevania2.GB
+f. Castlevania3.GB
+g. FinalFantasyAdventure.GB
+h. FinalFantasyLegend1.GB
+i. FinalFantasyLegend2.GB
+j. FinalFantasyLegend3.GB
+k. KirbysStarStacker.GB
+l. Kirby2.GB
+m. Ranma.GB
+n. SamuraiShowdown.GB
+o. SuperMarioLand1.GB
+p. SuperMarioLand2.GB
+q. Tamagochi.GB
+r. Tetris.GB
+s. Twinbee.GB
+t. Zelda.GB

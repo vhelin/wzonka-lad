@@ -1,0 +1,777 @@
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		screen draw aga - the third generation routines 8D
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		cnop	0,4
+aga_screen_draw:move.l	a2,a6				;a6 = the fixed 16bit
+		add.l	#$ff40,a6			;a6 = lcd control.
+		moveq.l	#0,d7
+		move.b	(a6),d7				;d7 = lcd control byte.
+		btst	#7,d7				;lcd operation?
+		beq.s	clear_aga_screen		;no. clear and quit.
+		move.l	d7,lcd_control			;store the byte.
+
+		bsr.w	push_z80
+
+		move.l	aga_map_inactive,d6
+		cmp.l	aga_map_I,d6
+		beq.s	wait_I
+wait_II:	tst.b	visual_frame
+		bne.s	wait_II
+		bra.s	wait_done
+wait_I:		tst.b	visual_frame
+		beq.s	wait_I
+
+wait_done:	bsr.w	screen_aga_bg
+		bsr.w	screen_aga_win
+		bsr.w	screen_aga_sprs
+		bsr.w	update_aga_pal
+		bsr.w	swap_aga_buffex			;swap the lists.
+
+		bsr.w	pull_z80
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		clear screen
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+clear_aga_screen:
+		bsr.w	push_z80
+
+		move.l	aga_map_inactive,d6
+		cmp.l	aga_map_I,d6
+		beq.s	wait_In
+wait_IIn:	tst.b	visual_frame
+		bne.s	wait_IIn
+		bra.s	wait_donen
+wait_In:	tst.b	visual_frame
+		beq.s	wait_In
+
+wait_donen:	clr.l	lcd_control			;sprites off -> clear.
+							;window off -> clear.
+							;background off -> clear.
+		bsr.w	screen_aga_bg
+		bsr.w	screen_aga_win
+		bsr.w	screen_aga_sprs
+		bsr.w	update_aga_pal			;update the palette.
+		bsr.w	swap_aga_buffex			;swap the lists.
+
+		bsr.w	pull_z80
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		execute the background copying
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		cnop	0,4
+screen_aga_bg:	move.l	d7,d0				;d0 = lcd control byte.
+		btst	#0,d0				;background display?
+		beq.w	screen_aga_clear_the_background	;no. quit.
+
+		move.l	gb_memory,a0			;a0 = the fixed 16bit
+		move.l	a0,a1				;memory area.
+		add.l	#$ff42,a1			;a1 = lcd control.
+		moveq.l	#0,d2
+		move.b	(a1)+,d2			;d2 = bg scroll y.
+		moveq.l	#0,d3
+		move.b	(a1),d3				;d3 = bg scroll x.
+
+		move.l	d0,d1				;d1 = the control byte.
+		and.b	#%1000,d0			;d0 = background tiles.
+		lsl.w	#7,d0				;0/1 * 1024.
+		move.l	a0,a1
+		add.l	#$9800,a1			;tile position.
+		add.l	d0,a1				;selected position.
+							;a1 = input tiles.
+		and.b	#%10000,d1			;d1 = background tile
+		move.l	d1,d7				;datas. 0/1 * 2048.
+		lsl.b	#3,d7				;d7 = tile adder (signed/
+		bchg	#7,d7				;unsigned).
+		move.l	d7,tile_adder
+		lsl.w	#7,d1
+		move.l	a0,a2
+		add.l	#$8800,a2			;tile data position.
+		sub.l	d1,a2				;selected position.
+							;a2 = input tile datas.
+		move.l	a2,gb_tiles
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		copy background data
+;		INPUT:
+;		d2	= background scroll y.
+;		d3	= background scroll x.
+;		a1	= tiles.
+;		a2	= tile datas.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		move.l	d2,d4
+		lsr.w	#3,d2				;d2 = number of rows
+							;to be skipped.
+		move.b	d2,d6				;when d6=32 then back to y=0.
+
+		lsl.w	#5,d2				;d2 = d2 * 32 (start y).
+		add.l	d2,a1				;y of tiles = done.
+
+		move.l	d3,d5
+		lsr.w	#3,d3				;d3 = x start.
+		move.b	d3,d7				;when d7=32 then back to x=0.
+
+		move.l	bg_scroll_inactive,a0
+		and.b	#%111,d4			;d4 = y pixel scroll (0-7).
+		and.b	#%111,d5			;d5 = x pixel scroll (0-7).
+		move.l	d4,(a0)				;store the scroll value.
+		moveq.l	#8,d0
+		sub.b	d5,d0
+		move.l	aga_ro_inactive,a0
+		move.b	d0,(a0)				;new x h/w shift value used.
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		INPUT:
+;		d6	= (background start y) / 8.
+;		d7	= (background start x) / 8.
+;		a1	= tiles.
+;		a2	= tile pattern datas.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		move.l	aga_map_inactive,a0		;a0 = p0.
+		add.l	#40*8*16+64/8-1,a0		;position fix.
+		moveq.l	#(144/8)+1-1,d0			;y.
+		move.l	tile_adder,d2			;d2 = tile adder.
+		moveq.l	#0,d3				;speed up.
+
+		cnop	0,4
+screen_aga_colu:movem.l	d6/d7/a0,-(SP)
+		moveq.l	#8-1,d6
+		move.w	d2,d3
+		move.l	a2,a3
+		add.b	(a1,d7.l),d3			;d3 = left tile.
+		move.l	a0,a4				;a4 = data out.
+		addq.b	#1,d7
+		lsl.w	#4,d3				;d3 = d3 * 16.
+		and.b	#%11111,d7
+		add.l	d3,a3				;a3 = data in.
+		addq.l	#1,a0				;next x (after next loop).
+
+screen_aga_bdat:move.w	(a3)+,d4			;d4 = 00.B, 01.B.
+		move.b	d4,40(a4)			;01.B.
+		lsr.w	#8,d4
+		move.b	d4,(a4)				;00.B.
+		add.l	#40*8,a4
+		dbra	d6,screen_aga_bdat		;do the marginal bytes.
+
+		moveq.l	#(160/8)/4-1,d1			;x.
+screen_aga_rows:move.w	d2,d3
+		add.b	(a1,d7.l),d3			;d3 = left tile.
+		addq.b	#1,d7
+		lsl.w	#4,d3				;d3 = d3 * 16.
+		and.b	#%11111,d7
+		lea	(a2,d3.l),a3
+
+		move.w	d2,d3
+		add.b	(a1,d7.l),d3			;d3 = left tile.
+		addq.b	#1,d7
+		lsl.w	#4,d3				;d3 = d3 * 16.
+		and.b	#%11111,d7
+		lea	(a2,d3.l),a4
+
+		move.w	d2,d3
+		add.b	(a1,d7.l),d3			;d3 = left tile.
+		addq.b	#1,d7
+		lsl.w	#4,d3				;d3 = d3 * 16.
+		and.b	#%11111,d7
+		lea	(a2,d3.l),a5
+
+		move.w	d2,d3
+		add.b	(a1,d7.l),d3			;d3 = left tile.
+		addq.b	#1,d7
+		lsl.w	#4,d3				;d3 = d3 * 16.
+		and.b	#%11111,d7
+		lea	(a2,d3.l),a6
+
+		moveq.l	#8-1,d6
+screen_aga_out:	move.w	(a3)+,d3
+		lsl.l	#8,d3
+		move.w	d3,d5
+		move.w	(a4)+,d3
+		move.b	d3,d5
+		lsl.l	#8,d5
+		lsl.l	#8,d3
+		move.w	(a5)+,d3
+		move.b	d3,d5
+		lsl.l	#8,d5
+		move.w	(a6)+,d4
+		move.b	d4,d5				;d5 = p1 data.
+		move.l	d5,40(a0)
+		lsr.w	#8,d4
+		move.b	d4,d3				;d3 = p0 data.
+		move.l	d3,(a0)
+		add.l	#8*40,a0
+		dbra	d6,screen_aga_out		;next y.
+
+		moveq.l	#0,d3				;speed up reset.
+		sub.l	#8*8*40-4,a0			;next x.
+		dbra	d1,screen_aga_rows		;next four blocks.
+
+		movem.l	(SP)+,d6/d7/a0
+		add.l	#8*8*40,a0			;next y.
+		addq.b	#1,d6				;       (register).
+		and.b	#%11111,d6
+		beq.s	screen_aga_tup			;back to beginning.
+		add.l	#32,a1				;next y.
+		dbra	d0,screen_aga_colu		;next 168x8 line.
+		rts
+
+		cnop	0,4
+screen_aga_tup:	sub.l	#32*31,a1			;back to the beginning.
+		dbra	d0,screen_aga_colu		;next 168x8 line.
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		clear the background
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+screen_aga_clear_the_background:
+		move.l	aga_map_inactive,a0
+		move.w	#256,d0
+		moveq.l	#0,d1
+
+screen_aga_clear_the_background_loop:
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+			;40.
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+
+		move.l	d1,(a0)+			;80.
+		add.l	#(320/8)*6,a0
+		dbra	d0,screen_aga_clear_the_background_loop
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		do the sprites
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		cnop	0,4
+screen_aga_sprs:move.l	aga_map_inactive,a0		;the sprite area.
+		add.l	#40*8*16+4+40*4,a0		;a0 = sprite plane 0.
+		move.l	#40*8,d2			;a speed up.
+
+		move.l	aga_sprs_inactive,a2
+		add.l	#16,a2				;skip the first 16 rows.
+		move.w	#144-1,d0
+		cnop	0,4
+spr_aga_empty:	tst.b	(a2)
+		bne.s	aga_clear_me
+		add.l	d2,a0
+		addq.l	#1,a2
+		dbra	d0,spr_aga_empty
+		bra.s	aga_lines_done
+aga_clear_me:	clr.b	(a2)+
+		moveq.l	#(160+64-32)/8/4-1,d1
+		move.l	a0,a1
+		lea	40(a0),a3
+aga_clear_us:	clr.l	(a1)+
+		clr.l	(a3)+
+		dbra	d1,aga_clear_us
+		add.l	d2,a0
+		dbra	d0,spr_aga_empty
+
+aga_lines_done:	move.l	aga_map_inactive,a0		;the sprite area.
+		add.l	#40*8*16+4+40*6,a0		;a0 = sprite plane 2.
+
+		move.l	aga_sprs_inactive_x,a2
+		add.l	#16,a2				;skip the first 16 rows.
+		move.w	#144-1,d0
+		cnop	0,4
+xspr_aga_empty:	tst.b	(a2)
+		bne.s	xaga_clear_me
+		add.l	d2,a0
+		addq.l	#1,a2
+		dbra	d0,xspr_aga_empty
+		bra.s	xaga_lines_done
+xaga_clear_me:	clr.b	(a2)+
+		moveq.l	#(160+64-32)/8/4-1,d1
+		move.l	a0,a1
+		lea	40(a0),a3
+xaga_clear_us:	clr.l	(a1)+
+		clr.l	(a3)+
+		dbra	d1,xaga_clear_us
+		add.l	d2,a0
+		dbra	d0,xspr_aga_empty
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		line clearing has been executed
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+xaga_lines_done:move.l	lcd_control,d1			;d1 = lcd control byte.
+		btst	#1,d1				;sprites off?
+		beq.w	aga_spr_exit			;yes.
+
+		move.l	gb_memory,a0
+		move.l	a0,a1
+		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
+		add.l	#$8000,a1			;a1 = sprite pattern table.
+		moveq.l	#40-1,d0			;d0 = number of sprites.
+		move.l	#40,d6				;speed up.
+		move.l	x_flip_table,a2			;        .
+
+		btst	#2,d1				;sprite size?
+		bne.w	aspr_n8x16			;8x16.
+
+aspr_n8x8:	move.l	#8-1,sprite_y
+		move.b	#$ff,sprite_mask
+		bra.s	aspr_c8xq			;do the copying.
+aspr_n8x16:	move.l	#16-1,sprite_y
+		move.b	#$fe,sprite_mask
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		sprite size 8xq, q=8/16.
+;		INPUT:
+;		d0	= number of sprites.
+;		d6	= 40 (a speed up).
+;		a0	= sprite attribute table.
+;		a1	= sprite pattern area.
+;		a2	= x flip table.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+aspr_c8xq:	move.l	-(a0),d1			;d1 = y.B, x.B, gfx.B, flags.B.
+		move.l	d1,d2
+		swap	d2
+		tst.b	d2
+		beq.w	aspr_xit
+		lsr.w	#8,d2
+		beq.w	aspr_xit
+
+aspr_xcute:	swap	d1				;d1 = gfx.B, flags.B, y.B, x.B.
+		move.l	bg_scroll_x,d2			;x start (bg scroll pixels).
+		add.b	d1,d2				;d2 = x.B.
+		cmp.w	#8+160+8,d2			;out of vision?
+		bge.w	aspr_xit			;yes.
+
+		moveq.l	#0,d3
+		ror.w	#8,d1				;d1 = gfx.B, flags.B, x.B, y.B.
+		move.b	d1,d3				;d3 = y.B.
+		cmp.w	#16+144+8,d3			;out of vision?
+		bge.w	aspr_xit			;yes.
+
+		move.l	d3,a3				;a3 = scanline clear bytes.
+
+		move.w	d3,d4
+		lsl.w	#8,d4
+		lsl.w	#6,d3
+		add.w	d4,d3				;d3 = y on screen.
+							;(d3 = d3 * 40*8).
+		move.l	d2,d4				;d4 = x.B.
+		lsr.w	#3,d4				;d4 = x.B / 8.
+		add.l	d4,d3				;d3 = y and x fixed.
+		move.l	aga_map_inactive,a4
+		and.b	#%111,d2			;d2 = bit skip (0-7).
+		add.l	d3,a4				;a4 = output.
+		rol.l	#8,d1				;d1 = flags.B, x.B, y.B, gfx.B.
+		and.b	sprite_mask,d1
+		move.b	d1,d4				;d4 = gfx.B.
+		add.l	#40*4+(64/8)-1,a4		;to sprite planes.
+		lsl.w	#4,d4				;d4 = d4 * 16.
+		lea	(a1,d4.l),a6			;a6 = pattern data.
+
+		btst	#4+24,d1			;palette bit test.
+		beq.s	aga_spr_nop			;palette 0.
+		move.l	a4,a5				;a5 = mask plane.
+		add.l	#40*2,a4			;palette 1.
+		add.l	aga_sprs_inactive_x,a3		;         .
+		bra.s	pal_pla_done
+aga_spr_nop:	move.l	a4,a5
+		add.l	#40*2,a5			;a5 = mask plane.
+		add.l	aga_sprs_inactive,a3		;palette 0.
+
+pal_pla_done:	move.l	sprite_y,d7			;d7 = y-1.
+		btst	#6+24,d1			;y flipped?
+		bne.w	aga_spr_y			;yes.
+		btst	#5+24,d1			;x flipped?
+		bne.s	aga_spr_x			;yes.
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		normal sprite output
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		move.w	#$ffff,d1			;speed up.
+		cnop	0,4
+aga_spr_normal:	move.w	(a6)+,d3
+		beq.s	aga_spr_nx			;empty data.
+
+		move.b	d3,d4				;d4 = 01.
+		clr.b	d3				;d3 = 0x.
+		lsl.w	#8,d4				;d4 = 1x.
+		lsr.w	d2,d3				;bits skipped.
+		lsr.w	d2,d4				;bits skipped.
+
+		move.w	d3,d5
+		move.b	d1,(a3)+			;this sl must be cleared.
+		or.w	d4,d5
+		eor.w	d1,d5
+
+		and.w	d5,(a4)				;mask p0.
+		or.w	d3,(a4)
+		add.l	d6,a4
+		and.w	d5,(a4)				;mask p1.
+		or.w	d4,(a4)
+		add.l	#40*7,a4			;next y.
+
+		and.w	d5,(a5)
+		add.l	d6,a5
+		and.w	d5,(a5)
+		add.l	#40*7,a5
+
+		dbra	d7,aga_spr_normal		;next y (sprite data).
+aspr_xit:	dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+		cnop	0,4
+aga_spr_nx:	add.l	#40*8,a4
+		addq.l	#1,a3				;no data here.
+		add.l	#40*8,a5
+		dbra	d7,aga_spr_normal		;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		x flipped sprite output
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+aga_spr_x:	moveq.l	#0,d3
+		move.w	#$ffff,d1			;speed up.
+		cnop	0,4
+aga_spr_xz:	move.w	(a6)+,d3
+		beq.s	aga_spr_xx			;empty data.
+		move.w	(a2,d3.l*2),d3			;x flipped data.
+
+		move.b	d3,d4				;d4 = 01.
+		clr.b	d3				;d3 = 0x.
+		lsl.w	#8,d4				;d4 = 1x.
+		lsr.w	d2,d3				;bits skipped.
+		lsr.w	d2,d4				;bits skipped.
+
+		move.w	d3,d5
+		move.b	d1,(a3)+			;this sl must be cleared.
+		or.w	d4,d5
+		eor.w	d1,d5
+
+		and.w	d5,(a4)				;mask p0.
+		or.w	d3,(a4)
+		add.l	d6,a4
+		and.w	d5,(a4)				;mask p1.
+		or.w	d4,(a4)
+		add.l	#40*7,a4			;next y.
+
+		and.w	d5,(a5)
+		add.l	d6,a5
+		and.w	d5,(a5)
+		add.l	#40*7,a5
+
+		dbra	d7,aga_spr_xz			;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+		cnop	0,4
+aga_spr_xx:	add.l	#40*8,a4
+		addq.l	#1,a3				;no data here.
+		add.l	#40*8,a5
+		dbra	d7,aga_spr_xz			;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		y flipping detected
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+aga_spr_y:	move.l	d7,d4
+		addq.b	#1,d4
+		lsl.b	#1,d4
+		add.l	d4,a6				;to sprite data end.
+
+		btst	#5+24,d1			;x flipped?
+		bne.s	aga_spr_xy			;yes.
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		y flipped sprite output
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		move.w	#$ffff,d1			;speed up.
+		cnop	0,4
+aga_spr_yz:	move.w	-(a6),d3
+		beq.s	aga_spr_ny			;empty data.
+
+		move.b	d3,d4				;d4 = 01.
+		clr.b	d3				;d3 = 0x.
+		lsl.w	#8,d4				;d4 = 1x.
+		lsr.w	d2,d3				;bits skipped.
+		lsr.w	d2,d4				;bits skipped.
+
+		move.w	d3,d5
+		move.b	d1,(a3)+			;this sl must be cleared.
+		or.w	d4,d5
+		eor.w	d1,d5
+
+		and.w	d5,(a4)				;mask p0.
+		or.w	d3,(a4)
+		add.l	d6,a4
+		and.w	d5,(a4)				;mask p1.
+		or.w	d4,(a4)
+		add.l	#40*7,a4			;next y.
+
+		and.w	d5,(a5)
+		add.l	d6,a5
+		and.w	d5,(a5)
+		add.l	#40*7,a5
+
+		dbra	d7,aga_spr_yz			;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+		cnop	0,4
+aga_spr_ny:	add.l	#40*8,a4
+		addq.l	#1,a3				;no data here.
+		add.l	#40*8,a5
+		dbra	d7,aga_spr_yz			;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		x flipped sprite output
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+aga_spr_xy:	moveq.l	#0,d3
+		move.w	#$ffff,d1			;speed up.
+		cnop	0,4
+aga_spr_xyz:	move.w	-(a6),d3
+		beq.s	aga_spr_xyx			;empty data.
+		move.w	(a2,d3.l*2),d3			;x flipped data.
+
+		move.b	d3,d4				;d4 = 01.
+		clr.b	d3				;d3 = 0x.
+		lsl.w	#8,d4				;d4 = 1x.
+		lsr.w	d2,d3				;bits skipped.
+		lsr.w	d2,d4				;bits skipped.
+
+		move.w	d3,d5
+		move.b	d1,(a3)+			;this sl must be cleared.
+		or.w	d4,d5
+		eor.w	d1,d5
+
+		and.w	d5,(a4)				;mask p0.
+		or.w	d3,(a4)
+		add.l	d6,a4
+		and.w	d5,(a4)				;mask p1.
+		or.w	d4,(a4)
+		add.l	#40*7,a4			;next y.
+
+		and.w	d5,(a5)
+		add.l	d6,a5
+		and.w	d5,(a5)
+		add.l	#40*7,a5
+
+		dbra	d7,aga_spr_xyz			;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+		cnop	0,4
+aga_spr_xyx:	add.l	#40*8,a4
+		addq.l	#1,a3				;no data here.
+		add.l	#40*8,a5
+		dbra	d7,aga_spr_xyz			;next y (sprite data).
+		dbra	d0,aspr_c8xq			;next sprite.
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		draw the h/w window using amiga sprites
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		cnop	0,4
+screen_aga_win:	move.l	lcd_control,d0			;d0 = lcd control byte.
+		btst	#5,d0				;window display?
+		beq.w	screen_aga_wxt			;nope.
+		btst	#0,d0
+		beq.w	screen_aga_wxt
+
+		move.l	gb_memory,a0
+		move.l	a0,a2
+
+		add.l	#$9800,a0			;window tiles.
+		and.b	#%1000000,d0			;d0 = tile position.
+		lsl.w	#4,d0				;d0 = 0/1 * 1024.
+		add.l	d0,a0				;a0 = window tiles.
+
+		move.l	gb_tiles,a1
+
+		add.l	#$ff4a,a2			;a2 = window y position.
+		moveq.l	#0,d0
+		move.b	(a2)+,d0			;d0 = window y pos ($ff4A).
+		moveq.l	#0,d1
+		move.b	(a2),d1				;d1 = window x pos ($ff4B).
+		cmp.b	#6,d1
+		bne.s	win_aga_no_no
+		addq.b	#1,d1
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		INPUT:
+;		d0	= window y position.
+;		d1	=        x         .
+;		a0	= window tiles.
+;		a1	= window tile pattern table.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+win_aga_no_no:	cmp.w	#160,d1
+		bge.w	screen_aga_wxt
+		cmp.w	#144,d0
+		bge.w	screen_aga_wxt
+		move.l	d0,-(SP)
+
+		add.w	#$2c,d0
+		add.w	#$81+64-8,d1
+
+		lsl.w	#8,d0
+		moveq.l	#3-1,d2				;max three 64x144 sprites.
+		move.l	aga_spr_inactive_pointer,a2	;pointers to the sprites.
+		move.w	#(144+2*16+12)*256,d4		;d4 = y end of sprite.
+		move.w	d1,d3
+		move.b	d1,d4
+		lsr.w	#1,d3				;d3 = x / 2.
+		and.b	#%1,d4				;d4 = sho bit.
+		lea	aga_spr_Ix,a5			;mask sprites.
+		moveq.l	#-1,d6				;d6 = visible sprite number.
+win_aga_pointer:move.l	(a2)+,a3
+		move.w	d0,d5
+		move.l	(a5)+,a4
+		move.b	d3,d5
+		move.w	d5,(a3)
+		move.w	d4,d7
+		move.w	d5,(a4)
+		addq.l	#8,a3
+		addq.l	#8,a4
+		move.w	d7,(a3)
+		addq.w	#1,d6				;one sprite more visible.
+		move.w	d7,(a4)
+		add.w	#64,d1
+		cmp.w	#$81+64-8+64*3,d1
+		bge.s	win_aga_no_more			;no more sprites.
+		add.b	#64/2,d3			;64 pixels right.
+		dbra	d2,win_aga_pointer
+		bra.s	no_empty_sprs
+
+win_aga_no_more:dbra	d2,win_aga_mush			;empty the next sprites.
+		bra.s	no_empty_sprs
+
+win_aga_mush:	move.l	(a2)+,a3
+		move.w	d5,(a3)
+		addq.l	#8,a3
+		move.l	(a5)+,a4
+		move.w	d5,(a4)
+		addq.l	#8,a4
+		move.w	d7,(a3)
+		move.w	d7,(a4)		
+		dbra	d2,win_aga_mush			;empty the next sprites.
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		prepare for the data transfer
+;		INPUT:
+;		d6	= number of used sprites - 1.
+;		a0	= window tiles.
+;		a1	= window tile pattern table.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+no_empty_sprs:	move.l	#144,d0
+		sub.l	(SP)+,d1
+		lsr.b	#3,d0				;d0 = dy/8.
+		move.l	aga_spr_inactive_pointer,a2	;a2 = pointer to the sprite
+							;pointers.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		copy data to sprites
+;		INPUT:
+;		d0	= delta y / 8.
+;		d6	= number of used sprites - 1.
+;		a0	= window tiles.
+;		a1	= window tile pattern table.
+;		a2	= pointer to the sprite pointers.
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+		cnop	0,4
+aga_window_fill:move.l	(a2)+,a6
+		movem.l	d0/d6/a0/a2,-(SP)
+		add.l	#16,a6				;skip the control words.
+
+aga_win_data_cp:moveq.l	#2-1,d7
+aga_win_data_do:move.l	tile_adder,d1
+		move.l	d1,d2
+		move.l	d1,d3
+		move.l	d1,d4
+		move.l	(a0)+,d5
+		add.b	d5,d4
+		lsr.l	#8,d5
+		add.b	d5,d3
+		lsr.l	#8,d5
+		add.b	d5,d2
+		lsr.w	#8,d5
+		add.b	d5,d1
+		lsl.w	#4,d4
+		lsl.w	#4,d3
+		lsl.w	#4,d2
+		lsl.w	#4,d1
+		lea	(a1,d4.l),a5			;xxx1.
+		lea	(a1,d3.l),a4			;xx1x.
+		lea	(a1,d2.l),a3			;x1xx.
+		lea	(a1,d1.l),a2			;1xxx.
+
+		moveq.l	#8-1,d6
+aga_win_data_mv:move.w	(a2)+,d5
+		move.b	d5,d4
+		lsl.w	#8,d4
+		lsl.l	#8,d5
+		move.w	(a3)+,d5
+		move.b	d5,d4
+		lsl.l	#8,d5
+		lsl.l	#8,d4
+		move.w	(a4)+,d5
+		move.b	d5,d4
+		lsl.l	#8,d4
+		move.w	(a5)+,d3
+		move.b	d3,d4
+		move.l	d4,8(a6)
+		lsr.w	#8,d3
+		move.b	d3,d5
+		move.l	d5,(a6)
+		add.l	#16,a6
+		dbra	d6,aga_win_data_mv
+		sub.l	#16*8-4,a6			;next x.
+		dbra	d7,aga_win_data_do
+		add.l	#16*8-8,a6			;next y column.
+		add.l	#32-4-4,a0			;             .
+		dbra	d0,aga_win_data_cp		;next 64 x 8 line.
+		movem.l	(SP)+,d0/d6/a0/a2
+		addq.l	#8,a0
+		dbra	d6,aga_window_fill		;next sprite.
+		rts
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		move all the sprites away from the view
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+screen_aga_wxt:	moveq.l	#3-1,d0
+		move.l	aga_spr_inactive_pointer,a0
+not_visible_spr:move.l	(a0)+,a1
+		move.b	#32*6,1(a1)
+		dbra	d0,not_visible_spr
+		rts

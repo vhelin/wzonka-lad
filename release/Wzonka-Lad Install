@@ -1,0 +1,436 @@
+; $VER: Wzonka-Lad Installer Script 1.01.00 (14-Aug-99)
+; Installer made by Lennart Johannesson
+; Modified by Ville Helin
+; For comments, bugs (yes, I know there's still a lot of them)
+; suggestions etc. write to: 95lenjo@ostrabo.uddevalla.se
+
+
+;Ask where to place the Wzonka-Lad directory
+
+(message "\nWelcome to Wzonka-Lad Installer!\n-----------------------\n\nThis program will install\n Wzonka-Lad 1.01.00\n on your Amiga\n\n (c) Ville Helin 1996-1999\nvhelin@cc.hut.fi\n\n")
+
+(welcome)
+
+(complete 0)
+
+(set @default-dest 
+	(askdir (prompt "Where would you like me to create the\n\"Wzonka-Lad\" directory?")
+	(help @askdir-help)
+	(default "Ram:")
+	(newpath)
+	)
+)
+
+;Create Wzonka-Lad directory
+
+(complete 6)
+
+(set target
+	(tackon @default-dest (cat "Wzonka-Lad")))
+
+(makedir target
+ 	(prompt "Creating directory:\n\""target"\"")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(dest @default-dest)
+	(source "icons/install/Wzonka-Lad.info")
+	(files))
+
+(set @default-dest (target))
+
+;Install the executables
+
+(complete 12)
+
+(copyfiles
+	(prompt "Where would you like me to put the executables?")
+	(help @askoptions-help)
+	(source "binaries/")
+	(dest @default-dest)
+	(confirm)
+	(files)
+	(infos)
+	(choices "Wzonka-Lad FULL" "Wzonka-Lad FAST" "Wzonka-Lad WARP" "Palette Editor")
+)
+
+(set @default-dest (target))
+
+;Install the documents
+
+(complete 18)
+
+(copyfiles
+	(prompt "Would you like to install the documents?")
+	(help @copyfiles-help)
+	(source "Wzonka-Lad Guide")
+	(dest @default-dest)
+	(confirm)
+	(files)
+	(infos)
+)
+
+(copyfiles
+	(dest @default-dest)
+	(source "icons/install/Wzonka-Lad Guide.info")
+	(files)
+)
+
+;Install controlpad.library
+
+(complete 24)
+
+(set @default-dest "LIBS:")
+
+(if (exists "LIBS:controlpad.library" (noreq))
+	(if (< (/ (getversion "LIBS:controlpad.library") 65536) (/ (getversion "libs/controlpad.library") 65536))
+		(copylib
+			(prompt "Install controlpad.library?\n(Required for Sega Joypad!)")
+			(help @copylib-help)
+			(source "libs/controlpad.library")
+			(dest @default-dest)
+			(confirm)
+		)
+	) ; else
+		(copylib
+			(prompt "Install controlpad.library?\n(Required for Sega Joypad!)")
+			(help @copylib-help)
+			(source "libs/controlpad.library")
+			(dest @default-dest)
+			(confirm)
+	)
+)
+
+;Install the fonts
+
+(complete 30)
+
+(set @default-dest "FONTS:")
+
+(copyfiles
+	(prompt "And the fonts...\nWhere do I put them?")
+	(help @copyfiles-help)
+	(source "fonts/")
+	(dest @default-dest)
+	(all)
+	(confirm)
+)
+
+;Install the sample ROM file(s)
+
+(complete 36)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "Where would you like to store your ROM files?\n(A drawer called \"cartridges\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+	)
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "cartridges")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the sample ROM file(s) to:\n")
+	(help @copyfiles-help)
+	(source "cartridges")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the sample battery ram(s)
+
+(complete 42)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "Where would you like to store your battery ram files?\n(A drawer called \"battery_rams\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+    )
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "battery_rams")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the sample battery ram file(s) to:\n")
+	(help @copyfiles-help)
+	(source "battery_rams")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the sample prefs
+
+(complete 48)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "And your cartridges prefs files?\n(A drawer called \"prefs\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+    )
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "prefs")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the sample prefs-file to:\n")
+	(help @copyfiles-help)
+	(source "prefs")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the sample iff
+
+(complete 54)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "Where would you like to store the example iff picture?\n(A drawer called \"iff\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+	)
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "iff")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the example iff to:\n")
+	(help @copyfiles-help)
+	(source "iff")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the sample vgb colour files
+
+(complete 60)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "And the VGB (tm) example colour files?\n(A drawer called \"vgb_colour_schemes\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+    )
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "vgb_colour_schemes")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the VGB (tm) example colour files to:\n")
+	(help @copyfiles-help)
+	(source "vgb_colour_schemes")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the extra Icons
+
+(complete 66)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "Where do you want the extra icons?\n(A drawer called \"icons\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+        )
+    )
+
+(set @default-dest
+	(tackon @default-dest (cat "icons")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the extra icons to:\n")
+	(help @copyfiles-help)
+	(source "icons")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the tools directory
+
+(complete 72)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "Where do you want the extra tools?\n(A drawer called \"tools\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+	)
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "tools")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install the extra tools to:\n")
+	(help @copyfiles-help)
+	(source "tools")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the gbs directory and an example gbs file
+
+(complete 78)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "And the gbs directory?\n(A drawer called \"gbs\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+	)
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "gbs")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install an gbs example file to:\n")
+	(help @copyfiles-help)
+	(source "gbs")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the favourites directory and the favourite list
+
+(complete 84)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "And the favourites directory?\n(A drawer called \"favourites\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+	)
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "favourites")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install an favourite.list example to:\n")
+	(help @copyfiles-help)
+	(source "favourites")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Install the game_genie directory and the game_genie list
+
+(complete 90)
+
+(set @default-dest (target))
+
+(set @default-dest
+(askdir	(prompt "And the GameGenie directory?\n(A drawer called \"game_genie\" will be made!)")
+	(help @askdir-help)
+	(default @default-dest)
+	(newpath)
+	)
+)
+
+(set @default-dest
+	(tackon @default-dest (cat "game_genie")))
+
+(makedir @default-dest
+	(prompt "Creating directory...")
+	(help @makedir-help)
+)
+
+(copyfiles
+	(prompt "Install an game_genie.list example to:\n")
+	(help @copyfiles-help)
+	(source "game_genie")
+	(dest @default-dest)
+	(confirm)
+	(all)
+)
+
+;Write out some copyright stuff
+
+(complete 100)
+
+(set @default-dest (target))
+
+(message "\nEnjoy your Gameboy (tm) emulator!\n\n(c) Ville Helin 1996-1999\nvhelin@cc.hut.fi\n\n For comments about the installer mail to:\nLennart Johannesson\n95lenjo@ostrabo.uddevalla.se")

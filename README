@@ -1,0 +1,25 @@
+
+---------------------------------------------------------------
+  Wzonka-Lad - Yet Another Gameboy Emulator for 68020+ Amigas  
+---------------------------------------------------------------
+           Written by Ville Helin in 1996-1999
+
+
+0. HISTORY
+
+Read "release/Wzonka-Lad Guide" for old events. Wzonka-Lad used
+to be shareware and closed software back in the day. The new history
+began 11-Aug-2003 as Wzonka-Lad was released under GPL 2.
+
+
+1. LEGAL STUFF
+
+Wzonka-Lad is GPL 2 software. Read the LICENSE file for further
+information. You use Wzonka-Lad at your own risk. I take no
+responsibility for anything.
+
+
+2. (GPL'ed RELEASE) HISTORY
+
+2003-12-23: * Added few missing files (the routines directory)
+2003-08-11: * Initial release

@@ -1,0 +1,57 @@
+;
+;$VER: GameGenie_codes 1.0 (17.06.98)
+;
+;This is the Wzonka-Lad GameGenie (tm) patch code archive file.
+;
+;Example:
+;
+;#GG_BEGIN
+;
+;#GAME_BEGIN
+;#NAME
+;"CHIBIMARUKO     "
+;#DESC
+;Maruko starts to sing and dance
+;#CODE
+;ABC-ABC-ABC
+;#DESC
+;Maruko shows her doll
+;#CODE
+;0F0-F0F-F00
+;#GAME_END
+;
+;#GG_END
+;
+;This is a very strict format, so be very careful! Note that the string
+;in the NAME - field must be exactly the same what you'll see in the ROM
+;preferences directory.
+;
+#GG_BEGIN
+
+#GAME_BEGIN
+#NAME
+"CASTLEVANIA ADVE"
+#DESC
+Start with 7 lives
+#CODE
+068-5EF-E62
+#DESC
+Infinite lives
+#CODE
+006-94F-3B7
+#DESC
+Infinite energy
+#CODE
+00A-F28-3B7
+#GAME_END
+
+#GAME_BEGIN
+#NAME
+"SUPER MARIOLAND "
+#DESC
+Everlasting power ball
+#CODE
+00A-17B-C49
+#GAME_END
+
+#GG_END

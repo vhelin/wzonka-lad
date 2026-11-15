@@ -1,0 +1,32 @@
+;
+;$VER: GameGenie_codes 1.1 (24.05.99)
+;
+;This is the Wzonka-Lad GameGenie (tm) patch code archive file.
+;
+;Example:
+;
+;#GG_BEGIN
+;
+;#GAME_BEGIN
+;#NAME
+;"CHIBILISA       "
+;#DESC
+;Lisa-chan starts to sing and dance
+;#CODE
+;ABC-ABC-ABC
+;#DESC
+;Lisa-chan talks to her doll
+;#CODE
+;0F0-F0F-F00
+;#GAME_END
+;
+;#GG_END
+;
+;This is a very strict format, so be very careful! Note that the string
+;in the NAME - field must be exactly the same what you'll see in the ROM
+;preferences directory.
+;
+#GG_BEGIN
+
+
+#GG_END

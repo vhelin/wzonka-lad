@@ -1,0 +1,46 @@
+;
+;$VER: Favourites 1.1.6 (24.05.99)
+;
+;Make a list of 20 of your favourite cartridges in the saved cartridges path.
+;Place the names inside this file (favourites.list).
+;The correct format is:
+;
+;[letter (a-t)]. [name (max 31 characters)]
+;
+;eg.
+;
+;a. Lisa.GB
+;b. Maru.GB
+;c. Popo.GB
+;
+;The amount of entries can range from one to 20.
+;
+;The names appear in the correct order in the menu list (a is the first,
+;t is the last entry).
+;
+;This format is a very strict one, so make sure the lower case letters begin
+;right in the beginning of a new line and there's one space between the
+;following dot and the entry name.
+;
+;Here's the default list.
+;
+a. Ichi.GB
+b. Ni.GB
+c. San.GB
+d. Yon.GB
+e. Go.GB
+f. Roku.GB
+g. Shichi.GB
+h. Hachi.GB
+i. Kyuu.GB
+j. Juu.GB
+k. Juuichi.GB
+l. Juuni.GB
+m. Juusan.GB
+n. Juuyon.GB
+o. Juugo.GB
+p. Juuroku.GB
+q. Juushichi.GB
+r. Juuhachi.GB
+s. Juukyuu.GB
+t. Nijuu.GB

@@ -8,7 +8,6 @@ sound_I_0:	tst.b	sound_I_onf_master
 		bne.s	sound_I_0_exit
 
 		move.b	d6,(a2,d7.l)			;$ff10.
-		move.b	#1,sound_I_f_envelope
 sound_I_0_exit:	rts
 
 		cnop	0,4
@@ -16,6 +15,15 @@ sound_I_1:	tst.b	sound_I_onf_master
 		bne.s	sound_I_duty_exit
 
 		move.b	d6,(a2,d7.l)			;$ff11.
+		move.l	d0,-(SP)
+		moveq.l	#0,d0
+		move.b	d6,d0
+		and.b	#%00111111,d0
+		neg.b	d0
+		add.b	#64,d0
+		move.b	d0,sound_I_length
+		move.l	(SP)+,d0
+
 
 		and.b	#%11000000,d6
 		cmp.b	old_sound_I_duty,d6
@@ -89,6 +97,13 @@ sound_I_2:	tst.b	sound_I_onf_master
 
 		movem.l	d0-d3/a0-a2,-(SP)
 
+		move.b	d6,d0
+		and.b	#$F8,d0
+		bne.s	sound_I_2_dac
+		move.l	a2,a0
+		add.l	#$ff00,a0
+		bclr.b	#0,$26(a0)
+sound_I_2_dac:
 		moveq.l	#0,d7
 		move.b	d6,d7
 		lsr.b	#4,d7
@@ -139,32 +154,68 @@ sound_I_3_exit:	rts
 
 		cnop	0,4
 sound_I_4:	tst.b	sound_I_onf_master
-		bne.s	sound_I_4_exit
+		bne.w	sound_I_4_exit
 
-		movem.l	d0-d2/a0-a2,-(SP)		;$ff14.
+		movem.l	d0-d3/a0-a2,-(SP)		;$ff14.
 
-		move.l	ahi_base,a6
-
-		move.b	d6,d0
+		move.b	d6,d3
 		and.b	#%111,d6
-		and.b	#%01000000,d0
 		move.b	d6,sound_I_fh
-		move.b	d0,(a2,d7.l)
+		move.b	d3,d6
+		and.b	#%01000000,d6
+		move.b	d6,(a2,d7.l)
 
-		move.l	#2048,d2
+		tst.b	d3
+		bpl.w	sound_I_4_freq
+
+		tst.b	sound_I_length
+		bne.s	sound_I_4_len
+		move.b	#64,sound_I_length
+sound_I_4_len:	move.b	#1,sound_I_v_envelope
+		move.b	#1,sound_I_f_envelope
+		move.l	a2,a0
+		add.l	d7,a0
+		moveq.l	#0,d0
+		move.b	-2(a0),d0
+		move.b	d0,d2
+		and.b	#$F8,d2
+		beq.s	sound_I_4_nodac
+		bset.b	#0,$12(a0)
+sound_I_4_nodac:
+		lsr.b	#4,d0
+		lea	sound_env_volumes,a0
+		move.l	(a0,d0.w*4),sound_I_v
+
+sound_I_4_freq:	move.l	#2048,d2
 		move.l	#131072,d1
 		sub.l	sound_I_f,d2
 		divu.l	d2,d1
 		lsl.l	#3,d1
 		and.l	#%111111111111111111,d1
 
+		move.l	ahi_base,a6
 		moveq.l	#0,d0
 		moveq.l	#0,d2
 		bset	#AHISB_IMM,d2
 		move.l	ahi_audio_ctrl,a2
 		jsr	AHI_SetFreq(a6)
 
-		movem.l	(SP)+,d0-d2/a0-a2
+		tst.b	d3
+		bpl.w	sound_I_4_restore
+
+		moveq.l	#0,d0
+		moveq.l	#0,d1
+		tst.l	sound_I_status
+		bne.s	sound_I_4_nov
+		move.l	sound_I_v,d1
+sound_I_4_nov:	move.l	sound_I_pan,d2
+		moveq.l	#0,d3
+		bset	#AHISB_IMM,d3
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_SetVol(a6)
+
+sound_I_4_restore:
+		movem.l	(SP)+,d0-d3/a0-a2
 sound_I_4_exit:	rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -176,6 +227,15 @@ sound_II_1:	tst.b	sound_II_onf_master
 		bne.s	sound_II_duty_exit
 
 		move.b	d6,(a2,d7.l)			;$ff16.
+		move.l	d0,-(SP)
+		moveq.l	#0,d0
+		move.b	d6,d0
+		and.b	#%00111111,d0
+		neg.b	d0
+		add.b	#64,d0
+		move.b	d0,sound_II_length
+		move.l	(SP)+,d0
+
 
 		and.b	#%11000000,d6
 		cmp.b	old_sound_II_duty,d6
@@ -249,6 +309,13 @@ sound_II_2:	tst.b	sound_II_onf_master
 
 		movem.l	d0-d3/a0-a2,-(SP)
 
+		move.b	d6,d0
+		and.b	#$F8,d0
+		bne.s	sound_II_2_dac
+		move.l	a2,a0
+		add.l	#$ff00,a0
+		bclr.b	#1,$26(a0)
+sound_II_2_dac:
 		moveq.l	#0,d7
 		move.b	d6,d7
 		lsr.b	#4,d7
@@ -299,33 +366,68 @@ sound_II_3_exit:rts
 
 		cnop	0,4
 sound_II_4:	tst.b	sound_II_onf_master
-		bne.s	sound_II_4_exit
+		bne.w	sound_II_4_exit
 
-		movem.l	d0-d2/a0-a2,-(SP)		;$ff19.
+		movem.l	d0-d3/a0-a2,-(SP)		;$ff19.
 
-		move.l	ahi_base,a6
-
-		move.b	d6,d0
+		move.b	d6,d3
 		and.b	#%111,d6
-		and.b	#%01000000,d0
 		move.b	d6,sound_II_fh
-		move.b	d0,(a2,d7.l)
+		move.b	d3,d6
+		and.b	#%01000000,d6
+		move.b	d6,(a2,d7.l)
 
+		tst.b	d3
+		bpl.w	sound_II_4_freq
+
+		tst.b	sound_II_length
+		bne.s	sound_II_4_len
+		move.b	#64,sound_II_length
+sound_II_4_len:	move.b	#1,sound_II_v_envelope
+		move.l	a2,a0
+		add.l	d7,a0
+		moveq.l	#0,d0
+		move.b	-2(a0),d0
+		move.b	d0,d2
+		and.b	#$F8,d2
+		beq.s	sound_II_4_nodac
+		bset.b	#1,$0D(a0)
+sound_II_4_nodac:
+		lsr.b	#4,d0
+		lea	sound_env_volumes,a0
+		move.l	(a0,d0.w*4),sound_II_v
+
+sound_II_4_freq:	move.l	#2048,d2
 		move.l	#131072,d1
-		move.l	#2048,d2
 		sub.l	sound_II_f,d2
 		divu.l	d2,d1
 		lsl.l	#3,d1
 		and.l	#%111111111111111111,d1
 
+		move.l	ahi_base,a6
 		moveq.l	#1,d0
 		moveq.l	#0,d2
 		bset	#AHISB_IMM,d2
 		move.l	ahi_audio_ctrl,a2
 		jsr	AHI_SetFreq(a6)
 
-		movem.l	(SP)+,d0-d2/a0-a2
-sound_II_4_exit:rts
+		tst.b	d3
+		bpl.w	sound_II_4_restore
+
+		moveq.l	#1,d0
+		moveq.l	#0,d1
+		tst.l	sound_II_status
+		bne.s	sound_II_4_nov
+		move.l	sound_II_v,d1
+sound_II_4_nov:	move.l	sound_II_pan,d2
+		moveq.l	#0,d3
+		bset	#AHISB_IMM,d3
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_SetVol(a6)
+
+sound_II_4_restore:
+		movem.l	(SP)+,d0-d3/a0-a2
+sound_II_4_exit:	rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		sound channel III sub routines
@@ -343,6 +445,10 @@ sound_III_0:	tst.b	sound_III_onf_master
 sound_III_off:	movem.l	d0-d3/a0-a2,-(SP)
 
 		move.b	#1,sound_III_onf_bit
+
+		move.l	a2,a0
+		add.l	#$ff00,a0
+		bclr.b	#2,$26(a0)
 
 		move.l	ahi_base,a6
 		moveq.l	#2,d0
@@ -382,6 +488,12 @@ sound_III_1:	tst.b	sound_III_onf_master
 		bne.s	sound_III_1_exit
 
 		move.b	d6,(a2,d7.l)			;$ff1b.
+		move.l	d0,-(SP)
+		moveq.l	#0,d0
+		move.b	d6,d0
+		move.w	#256,sound_III_length
+		sub.w	d0,sound_III_length
+		move.l	(SP)+,d0
 sound_III_1_exit:
 		rts
 
@@ -443,17 +555,18 @@ sound_III_3_exit:
 
 		cnop	0,4
 sound_III_4:	tst.b	sound_III_onf_master
-		bne.s	sound_III_4_exit
+		bne.w	sound_III_4_exit
 
-		movem.l	d0-d2/a0-a2,-(SP)		;$ff1e.
+		movem.l	d0-d3/a0-a2,-(SP)		;$ff1e.
 
-		move.b	d6,d0
+		move.b	d6,d3
 		and.b	#%111,d6
-		and.b	#%01000000,d0
 		move.b	d6,sound_III_fh
-		move.b	d0,(a2,d7.l)
+		move.b	d3,d6
+		and.b	#%01000000,d6
+		move.b	d6,(a2,d7.l)
 
-		move.l	#131072,d1
+		move.l	#131072/2,d1
 		move.l	#2048,d2
 		sub.l	sound_III_f,d2
 		divu.l	d2,d1
@@ -467,7 +580,32 @@ sound_III_4:	tst.b	sound_III_onf_master
 		move.l	ahi_audio_ctrl,a2
 		jsr	AHI_SetFreq(a6)
 
-		movem.l	(SP)+,d0-d2/a0-a2
+		tst.b	d3
+		bpl.w	sound_III_4_restore
+
+		tst.w	sound_III_length
+		bne.s	sound_III_4_len
+		move.w	#256,sound_III_length
+sound_III_4_len:
+		move.l	gb_memory,a0
+		add.l	#$ff00,a0
+		btst.b	#7,$1a(a0)
+		beq.s	sound_III_4_nodac
+		bset.b	#2,$26(a0)
+sound_III_4_nodac:
+		moveq.l	#2,d0
+		moveq.l	#0,d1
+		tst.l	sound_III_status
+		bne.s	sound_III_4_nov
+		move.l	sound_III_v,d1
+sound_III_4_nov:	move.l	sound_III_pan,d2
+		moveq.l	#0,d3
+		bset	#AHISB_IMM,d3
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_SetVol(a6)
+
+sound_III_4_restore:
+		movem.l	(SP)+,d0-d3/a0-a2
 sound_III_4_exit:
 		rts
 
@@ -492,6 +630,14 @@ sound_IV_1:	tst.b	sound_IV_onf_master
 		bne.s	sound_IV_1_exit
 
 		move.b	d6,(a2,d7.l)			;$ff20.
+		move.l	d0,-(SP)
+		moveq.l	#0,d0
+		move.b	d6,d0
+		and.b	#%00111111,d0
+		neg.b	d0
+		add.b	#64,d0
+		move.b	d0,sound_IV_length
+		move.l	(SP)+,d0
 sound_IV_1_exit:rts
 
 		cnop	0,4
@@ -502,6 +648,13 @@ sound_IV_2:	tst.b	sound_IV_onf_master
 
 		movem.l	d0-d3/a0-a2,-(SP)
 
+		move.b	d6,d0
+		and.b	#$F8,d0
+		bne.s	sound_IV_2_dac
+		move.l	a2,a0
+		add.l	#$ff00,a0
+		bclr.b	#3,$26(a0)
+sound_IV_2_dac:
 		moveq.l	#0,d7
 		move.b	d6,d7
 		lsr.b	#4,d7
@@ -520,7 +673,7 @@ no_s_IV_addx:	move.l	sound_IV_pan,d2
 		move.l	ahi_audio_ctrl,a2
 		jsr	AHI_SetVol(a6)
 
-		move.b	#1,sound_I_v_envelope
+		move.b	#1,sound_IV_v_envelope
 
 		movem.l	(SP)+,d0-d3/a0-a2
 sound_IV_2_exit:rts
@@ -541,7 +694,7 @@ sound_IV_3:	tst.b	sound_IV_onf_master
 
 		lsr.b	#4,d7
 		and.b	#%1111,d7
-		addq.b	#1,d7
+		addq.b	#4,d7
 		lsr.l	d7,d1
 
 		move.l	ahi_base,a6
@@ -556,29 +709,32 @@ sound_IV_3_exit:rts
 
 		cnop	0,4
 sound_IV_4:	tst.b	sound_IV_onf_master
-		bne.s	sound_IV_4_exit
+		bne.w	sound_IV_4_exit
 
-		and.b	#%01000000,d6			;$ff23.
+		movem.l	d0-d3/a0-a2,-(SP)		;$ff23.
+
+		move.b	d6,d3
+		and.b	#%01000000,d6
 		move.b	d6,(a2,d7.l)
+		tst.b	d3
+		bpl.w	sound_IV_4_restore
 
-		beq.s	sound_IV_4_kicked
-
-		movem.l	d0-d3/a0-a2,-(SP)
-
-		move.l	ahi_base,a6
-		moveq.l	#3,d0
-		moveq.l	#0,d1
-		move.l	sound_IV_pan,d2
-		moveq.l	#0,d3
-		bset	#AHISB_IMM,d3
-		move.l	ahi_audio_ctrl,a2
-		jsr	AHI_SetVol(a6)
-
-		movem.l	(SP)+,d0-d3/a0-a2
-sound_IV_4_exit:rts
-
-sound_IV_4_kicked:
-		movem.l	d0-d3/a0-a2,-(SP)
+		tst.b	sound_IV_length
+		bne.s	sound_IV_4_len
+		move.b	#64,sound_IV_length
+sound_IV_4_len:	move.b	#1,sound_IV_v_envelope
+		move.l	a2,a0
+		add.l	d7,a0
+		moveq.l	#0,d0
+		move.b	-2(a0),d0
+		move.b	d0,d2
+		and.b	#$F8,d2
+		beq.s	sound_IV_4_nodac
+		bset.b	#3,$03(a0)
+sound_IV_4_nodac:
+		lsr.b	#4,d0
+		lea	sound_env_volumes,a0
+		move.l	(a0,d0.w*4),sound_IV_v
 
 		move.l	ahi_base,a6
 		moveq.l	#3,d0
@@ -592,8 +748,9 @@ no_s_IV_addt:	move.l	sound_IV_pan,d2
 		move.l	ahi_audio_ctrl,a2
 		jsr	AHI_SetVol(a6)
 
+sound_IV_4_restore:
 		movem.l	(SP)+,d0-d3/a0-a2
-		rts
+sound_IV_4_exit:	rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		sound control routines
@@ -714,20 +871,23 @@ no_IV_vc:	movem.l	(SP)+,d0-d3/a0-a2
 		rts
 
 		cnop	0,4
-sound_V_2:	and.b	#%10001111,d6			;$ff26.
-		move.b	d6,(a2,d7.l)
-
-		movem.l	d0-d3/a0-a2,-(SP)
-
+sound_V_2:	movem.l	d0-d3/a0-a2,-(SP)		;$ff26.
+		move.b	(a2,d7.l),d0
+		btst	#7,d6
+		beq.w	sound_V_off
+		btst	#7,d0
+		bne.s	sound_V_keep
+		move.b	#$F0,(a2,d7.l)
 		clr.b	sound_I_onf_master
 		clr.b	sound_II_onf_master
 		clr.b	sound_III_onf_master
 		clr.b	sound_IV_onf_master
+		bra.w	sounds_on_jmp
+sound_V_keep:	movem.l	(SP)+,d0-d3/a0-a2
+		rts
 
-		btst	#7,d6
-		bne.w	sounds_on_jmp
-
-sound_V_off:	move.l	ahi_base,a6
+sound_V_off:	move.b	#$70,(a2,d7.l)
+		move.l	ahi_base,a6
 
 		moveq.l	#0,d0
 		moveq.l	#0,d1
@@ -765,6 +925,15 @@ sound_V_off:	move.l	ahi_base,a6
 		move.b	#1,sound_II_onf_master
 		move.b	#1,sound_III_onf_master
 		move.b	#1,sound_IV_onf_master
+
+		clr.b	sound_I_v_envelope
+		clr.b	sound_II_v_envelope
+		clr.b	sound_IV_v_envelope
+		clr.b	sound_I_f_envelope
+		clr.l	sound_I_v
+		clr.l	sound_II_v
+		clr.l	sound_III_v
+		clr.l	sound_IV_v
 
 		move.l	gb_memory,a0			;reset the sound registers.
 		add.l	#$ff00,a0

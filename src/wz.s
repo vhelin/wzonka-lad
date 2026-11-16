@@ -9348,7 +9348,12 @@ cpu_halt_is_on_4:
 
 		IFEQ	GAMEBOY_USERS
 		tst.b	snd_quality
-		beq.s	snd_high_do
+		beq.w	snd_high_do
+		cmp.b	#1,snd_quality
+		bne.s	snd_high_back
+		tst.l	ahi_base
+		beq.s	snd_high_back
+		bsr.w	sound_length_clock
 		ENDIF
 
 snd_high_back:	cmp.l	#153,gb_scanlines		;end of lines?
@@ -9421,9 +9426,10 @@ input_irq_exit:	rts
 snd_high_do:	tst.l	ahi_base
 		beq.w	snd_high_back
 
+		bsr.w	sound_length_clock
+
 		tst.b	snd_chnlI
 		bne.w	snd_high_no_I_f
-		bra.w	snd_high_no_I_f
 
 		move.b	sound_I_f_envelope,d6
 		beq.w	snd_high_no_I_f
@@ -9447,12 +9453,15 @@ snd_high_do:	tst.l	ahi_base
 		move.l	d7,sound_I_f_envelope_counter
 		move.b	#2,sound_I_f_envelope
 
-		move.w	3(a6),d7
-		ror.w	#8,d7
+		move.l	sound_I_f,d7
 		and.l	#%11111111111,d7
 		move.l	d7,sound_I_f_initial_frequency
 
-		bra.w	snd_high_no_I_f
+		move.b	(a6),d6
+		and.b	#%111,d6
+		beq.w	snd_high_no_I_f
+		move.b	(a6),d6
+		bra.w	snd_high_I_f_calc
 
 snd_high_continue_I_f:
 		subq.l	#1,sound_I_f_envelope_counter
@@ -9464,34 +9473,59 @@ snd_high_continue_I_f:
 		add.l	#$ff10,a6
 		move.b	(a6),d6
 
-		move.l	sound_I_f_initial_frequency,d7
-
+snd_high_I_f_calc:
+		movem.l	d0-d3/a0-a2,-(SP)
+		move.l	sound_I_f_initial_frequency,d0
+		move.l	d0,d1
+		moveq.l	#0,d2
+		move.b	d6,d2
+		and.b	#%111,d2
+		lsr.l	d2,d1
 		btst	#3,d6
-		beq.s	snd_high_continue_I_f_add
-
-snd_high_continue_I_f_sub:
-		and.b	#%111,d6
-		lsr.l	d6,d7
-		sub.l	d7,sound_I_f_initial_frequency
-		bra.s	snd_high_continue_I_f_change
-
-snd_high_continue_I_f_add:
-		and.b	#%111,d6
-		lsr.l	d6,d7
-		add.l	d7,sound_I_f_initial_frequency
-
-snd_high_continue_I_f_change:
-		movem.l	d0-d2/a0-a2,-(SP)
-
+		beq.s	snd_high_I_f_up
+		sub.l	d1,d0
+		bra.s	snd_high_I_f_lim
+snd_high_I_f_up:
+		add.l	d1,d0
+snd_high_I_f_lim:
+		cmp.l	#2047,d0
+		bhi.w	snd_high_I_f_over
+		tst.b	d2
+		beq.w	snd_high_I_f_pop
+		move.l	d0,sound_I_f_initial_frequency
+		move.b	d0,sound_I_fl
+		lsr.w	#8,d0
+		move.b	d0,sound_I_fh
+		move.l	#2048,d2
+		move.l	#131072,d1
+		sub.l	sound_I_f,d2
+		divu.l	d2,d1
+		lsl.l	#3,d1
+		and.l	#%111111111111111111,d1
 		move.l	ahi_base,a6
 		moveq.l	#0,d0
-		move.l	sound_I_f_initial_frequency,d1
 		moveq.l	#0,d2
 		bset	#AHISB_IMM,d2
 		move.l	ahi_audio_ctrl,a2
 		jsr	AHI_SetFreq(a6)
-
-		movem.l	(SP)+,d0-d2/a0-a2
+		bra.s	snd_high_I_f_pop
+snd_high_I_f_over:
+		clr.b	sound_I_f_envelope
+		clr.b	sound_I_v_envelope
+		clr.l	sound_I_v
+		move.l	ahi_base,a6
+		moveq.l	#0,d0
+		moveq.l	#0,d1
+		move.l	sound_I_pan,d2
+		moveq.l	#0,d3
+		bset	#AHISB_IMM,d3
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_SetVol(a6)
+		move.l	gb_memory,a0
+		add.l	#$ff26,a0
+		bclr.b	#0,(a0)
+snd_high_I_f_pop:
+		movem.l	(SP)+,d0-d3/a0-a2
 
 snd_high_no_I_f:
 
@@ -9540,22 +9574,7 @@ snd_high_I_inc:	add.b	#1,d7
 
 		clr.b	sound_I_v_envelope
 
-		btst.b	#6,$14(a6)
-		beq.w	snd_high_no_I
-
-snd_high_I_off:	movem.l	d0-d3/a0-a2,-(SP)
-
-		move.l	ahi_base,a6
-		moveq.l	#0,d0
-		moveq.l	#0,d1
-		move.l	sound_I_pan,d2
-		moveq.l	#0,d3
-		bset	#AHISB_IMM,d3
-		move.l	ahi_audio_ctrl,a2
-		jsr	AHI_SetVol(a6)
-
-		movem.l	(SP)+,d0-d3/a0-a2
-		bra.s	snd_high_no_I
+		bra.w	snd_high_no_I
 
 snd_high_I_dec:	subq.b	#1,d7
 		bge.s	snd_high_I_new_volume
@@ -9633,22 +9652,7 @@ snd_high_II_inc:add.b	#1,d7
 
 		clr.b	sound_II_v_envelope
 
-		btst.b	#6,$19(a6)
-		beq.w	snd_high_no_II
-
-snd_high_II_off:movem.l	d0-d3/a0-a2,-(SP)
-
-		move.l	ahi_base,a6
-		moveq.l	#1,d0
-		moveq.l	#0,d1
-		move.l	sound_II_pan,d2
-		moveq.l	#0,d3
-		bset	#AHISB_IMM,d3
-		move.l	ahi_audio_ctrl,a2
-		jsr	AHI_SetVol(a6)
-
-		movem.l	(SP)+,d0-d3/a0-a2
-		bra.s	snd_high_no_II
+		bra.w	snd_high_no_II
 
 snd_high_II_dec:subq.b	#1,d7
 		bge.s	snd_high_II_new_volume
@@ -9726,22 +9730,7 @@ snd_high_IV_inc:add.b	#1,d7
 
 		clr.b	sound_IV_v_envelope
 
-		btst.b	#6,$23(a6)
-		beq.w	snd_high_no_IV
-
-snd_high_IV_off:movem.l	d0-d3/a0-a2,-(SP)
-
-		move.l	ahi_base,a6
-		moveq.l	#3,d0
-		moveq.l	#0,d1
-		move.l	sound_IV_pan,d2
-		moveq.l	#0,d3
-		bset	#AHISB_IMM,d3
-		move.l	ahi_audio_ctrl,a2
-		jsr	AHI_SetVol(a6)
-
-		movem.l	(SP)+,d0-d3/a0-a2
-		bra.s	snd_high_no_IV
+		bra.w	snd_high_no_IV
 
 snd_high_IV_dec:subq.b	#1,d7
 		bge.s	snd_high_IV_new_volume
@@ -9773,6 +9762,84 @@ no_s_IV_addk:	move.l	sound_IV_pan,d2
 		movem.l	(SP)+,d0-d3/a0-a2
 
 snd_high_no_IV:	bra.w	snd_high_back
+
+sound_length_clock:
+		subq.b	#1,sound_length_div
+		beq.s	sound_length_clock_go
+		rts
+sound_length_clock_go:
+		move.b	#36,sound_length_div
+		movem.l	d0-d3/a0-a2,-(SP)
+		move.l	a2,a0
+		add.l	#$ff00,a0
+
+		btst.b	#6,$14(a0)
+		beq.w	sound_length_II
+		tst.b	sound_I_length
+		beq.w	sound_length_II
+		subq.b	#1,sound_I_length
+		bne.w	sound_length_II
+		clr.b	sound_I_v_envelope
+		clr.b	sound_I_f_envelope
+		clr.l	sound_I_v
+		bclr.b	#0,$26(a0)
+		moveq.l	#0,d0
+		bsr.w	sound_length_silence
+
+sound_length_II:
+		btst.b	#6,$19(a0)
+		beq.w	sound_length_III
+		tst.b	sound_II_length
+		beq.w	sound_length_III
+		subq.b	#1,sound_II_length
+		bne.w	sound_length_III
+		clr.b	sound_II_v_envelope
+		clr.l	sound_II_v
+		bclr.b	#1,$26(a0)
+		moveq.l	#1,d0
+		bsr.w	sound_length_silence
+
+sound_length_III:
+		btst.b	#6,$1e(a0)
+		beq.w	sound_length_IV
+		tst.w	sound_III_length
+		beq.w	sound_length_IV
+		subq.w	#1,sound_III_length
+		bne.w	sound_length_IV
+		bclr.b	#2,$26(a0)
+		moveq.l	#2,d0
+		bsr.w	sound_length_silence
+
+sound_length_IV:
+		btst.b	#6,$23(a0)
+		beq.w	sound_length_clock_pop
+		tst.b	sound_IV_length
+		beq.w	sound_length_clock_pop
+		subq.b	#1,sound_IV_length
+		bne.w	sound_length_clock_pop
+		clr.b	sound_IV_v_envelope
+		clr.l	sound_IV_v
+		bclr.b	#3,$26(a0)
+		moveq.l	#3,d0
+		bsr.w	sound_length_silence
+
+sound_length_clock_pop:
+		movem.l	(SP)+,d0-d3/a0-a2
+		rts
+
+sound_length_silence:
+		movem.l	d0-d3/a0-a2,-(SP)
+		move.l	ahi_base,a6
+		lea	sound_I_pan,a0
+		move.l	(a0,d0.w*4),d2
+		moveq.l	#0,d1
+		moveq.l	#0,d3
+		bset	#AHISB_IMM,d3
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_SetVol(a6)
+		movem.l	(SP)+,d0-d3/a0-a2
+		rts
+
 		ENDIF
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -10366,8 +10433,6 @@ no_chnlIII_no_no:
 		moveq.l	#0,d1
 		tst.b	sound_IV_onf
 		bne.s	no_s_IV_addh
-		btst.b	#6,$23(a5)
-		bne.s	no_s_IV_addh
 		move.l	sound_IV_v,d1
 no_s_IV_addh:	move.l	sound_IV_pan,d2
 		moveq.l	#0,d3
@@ -10384,7 +10449,7 @@ no_s_IV_addh:	move.l	sound_IV_pan,d2
 
 		lsr.b	#4,d7
 		and.b	#%1111,d7
-		addq.b	#1,d7
+		addq.b	#4,d7
 		lsr.l	d7,d1
 
 		moveq.l	#3,d0
@@ -12532,7 +12597,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad 1.03.00"
+menu_title:	dc.b	"Wzonka-Lad 1.10.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -12780,7 +12845,7 @@ misc_txt_2:	dc.b	"GameGenie patch code",0
 ;		menu gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_scr_txt:	dc.b	"Wzonka-Lad 1.03.00"
+menu_scr_txt:	dc.b	"Wzonka-Lad 1.10.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -13728,7 +13793,7 @@ about_text_2:	dc.b	1
 		dc.l	about_txt_2
 		dc.l	0
 
-about_txt_1:	dc.b	"WZONKA-LAD 1.03.00"
+about_txt_1:	dc.b	"WZONKA-LAD 1.10.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"R"
 		ELSE
@@ -14200,7 +14265,7 @@ misc_win_txt:	dc.b	"Misc settings",0
 ;		the version string
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-version_data:	dc.b	"$VER: Wzonka-Lad 1.03.00"
+version_data:	dc.b	"$VER: Wzonka-Lad 1.10.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -15264,6 +15329,13 @@ sound_IV_v_envelope_counter_base:
 		dc.l	0
 sound_IV_v_envelope_counter:
 		dc.l	0
+
+sound_length_div:	dc.b	36
+sound_I_length:	dc.b	0
+sound_II_length:	dc.b	0
+sound_IV_length:	dc.b	0
+		even
+sound_III_length:	dc.w	0
 
 sound_I_status:	
 sound_I_onf:	dc.b	0

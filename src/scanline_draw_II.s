@@ -262,9 +262,35 @@ scan_sprites:	move.l	gb_memory,a0
 
 sspr_n8x8:	move.l	#8-1,sprite_y			;a coming compare fixed
 		move.b	#$ff,sprite_mask
-		bra.s	sspr_c8xq			;value.
+		bra.s	sspr_pick			;value.
 sspr_n8x16:	move.l	#16-1,sprite_y
 		move.b	#$fe,sprite_mask
+
+sspr_pick:	move.l	gb_memory,a0
+		add.l	#$fe00,a0			;sprite 0.
+		move.l	gb_scanlines,d4
+		add.l	#16,d4			;ly + 16.
+		lea	spr_pick,a6
+		moveq.l	#0,d2
+		moveq.l	#40-1,d0
+sspr_pick_n:	move.l	(a0)+,d1			;y, x, tile, flags.
+		move.l	d1,d3
+		swap	d3
+		lsr.w	#8,d3			;d3 = y.
+		cmp.w	d3,d4			;line above the sprite?
+		blo.s	sspr_pick_x		;yes.
+		move.l	d3,d6
+		add.l	sprite_y,d6
+		cmp.w	d6,d4			;line below the sprite?
+		bhi.s	sspr_pick_x		;yes.
+		move.l	d1,(a6)+
+		addq.b	#1,d2			;hardware counts this one.
+sspr_pick_x:	dbra	d0,sspr_pick_n
+sspr_picked:	tst.b	d2
+		beq.w	exit_spr			;nothing on this line.
+		move.l	a6,a0			;draw the last pick first.
+		move.l	d2,d0
+		subq.l	#1,d0
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		sprite size 8xq, q=8/16.
@@ -276,16 +302,14 @@ sspr_n8x16:	move.l	#16-1,sprite_y
 ;		a3	= sprite output planes.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-sspr_c8xq:	cmp.b	#10,aga_spr_amount		;max sprites (h/w limit)?
-		beq.w	exit_spr			;yes.
-
+sspr_c8xq:
 		move.l	-(a0),d1			;d1 = y.B, x.B, gfx.B, flags.B.
 		swap	d1				;d1 = gfx.B, flags.B, y.B, x.B.
 		moveq.l	#0,d2
 		moveq.l	#0,d3
 		move.b	d1,d2				;d2 = x.B.
 		cmp.w	#160+8,d2			;crossed the right border?
-		bge.w	next_spr			;yes.
+		bhs.w	next_spr			;yes.
 
 		ror.w	#8,d1				;d1 = gfx.B, flags.B, x.B, y.B.
 		move.b	d1,d3				;d3 = y.B.
@@ -295,11 +319,11 @@ sspr_c8xq:	cmp.b	#10,aga_spr_amount		;max sprites (h/w limit)?
 		add.l	#16,d4				;y position fix.
 		move.l	d4,d6
 		cmp.w	d3,d4				;scanline lower?
-		blt.w	next_spr			;yes.
+		blo.w	next_spr			;yes.
 		move.l	d3,d7
 		add.l	sprite_y,d7
 		cmp.w	d7,d4				;scanline higher?
-		bgt.w	next_spr			;yes.
+		bhi.w	next_spr			;yes.
 
 		move.l	d5,d7
 		lsl.w	#4,d5
@@ -342,9 +366,9 @@ spr_y_back:	lsl.b	#1,d6				;y = y * 2 (for data).
 
 spr_x_back:	lsr.w	#8,d1				;d1 = x.B, y.B, 0.B, pal.B.
 		cmp.w	#8,d2				;x < 8?
-		blt.s	spr_less_8			;yes.
+		blo.s	spr_less_8			;yes.
 		cmp.w	#8+160-8,d2			;152 < x < 160?
-		bgt.w	spr_over_152
+		bhi.w	spr_over_152
 
 		subq.l	#8,d2				;x position fix.
 		move.l	d2,d4				;d4 = x.B.

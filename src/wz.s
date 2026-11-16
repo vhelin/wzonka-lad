@@ -45,6 +45,7 @@
 GAMEBOY_DEBUG		=0				;0 = n / 1 = y.
 GAMEBOY_SERIAL		=0				;0 = n / 1 = y.
 GAMEBOY_USERS		=0				;0 = r / 1 = e.
+GAMEBOY_OAM_BUG		=0				;0 = n / 1 = y.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 		IFEQ	GAMEBOY_USERS
@@ -12287,6 +12288,10 @@ aga_col_bg:	dc.l	0
 aga_col_sprs:	dc.l	0
 gb_x:		dc.l	0				;scroll x for the screen.
 aga_spr_amount:	dc.l	0				;max 10.
+spr_pick:	dc.l	0,0,0,0,0,0,0,0,0,0
+		dc.l	0,0,0,0,0,0,0,0,0,0
+		dc.l	0,0,0,0,0,0,0,0,0,0
+		dc.l	0,0,0,0,0,0,0,0,0,0
 
 aga_ro_list_I:	dc.l	0
 aga_ro_list_II:	dc.l	0

@@ -427,9 +427,31 @@ sspr_aga_n8x16:	move.l	#16-1,sprite_y
 
 sspr_aga_begin:	move.l	gb_memory,a0
 		move.l	a0,a1
-		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
 		add.l	#$8000,a1			;a1 = sprite pattern table.
-		moveq.l	#40-1,d0			;d0 = number of sprites.
+		add.l	#$fe00,a0			;a0 = sprite 0.
+		move.l	gb_scanlines,d4
+		add.b	#16,d4			;ly + 16.
+		lea	spr_pick,a6
+		moveq.l	#0,d2
+		moveq.l	#40-1,d0
+sspr_aga_pick:	move.l	(a0)+,d1			;y, x, tile, flags.
+		move.l	d1,d3
+		swap	d3
+		lsr.w	#8,d3			;d3 = y.
+		cmp.w	d3,d4			;line above the sprite?
+		blo.s	sspr_aga_pick_x		;yes.
+		move.l	d3,d6
+		add.l	sprite_y,d6
+		cmp.w	d6,d4			;line below the sprite?
+		bhi.s	sspr_aga_pick_x		;yes.
+		move.l	d1,(a6)+
+		addq.b	#1,d2			;hardware counts this one.
+sspr_aga_pick_x:	dbra	d0,sspr_aga_pick
+sspr_aga_picked:	tst.b	d2
+		beq.w	aga_spr_exit			;nothing on this line.
+		move.l	a6,a0			;draw the last pick first.
+		move.l	d2,d0
+		subq.l	#1,d0
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		sprite size 8xq, q=8/16.
@@ -440,15 +462,13 @@ sspr_aga_begin:	move.l	gb_memory,a0
 ;		a3	= sprite output planes.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-sspr_aga_c8xq:	cmp.b	#10,aga_spr_amount		;max sprites (h/w limit)?
-		beq.w	aga_spr_exit			;yes. exit.
-
+sspr_aga_c8xq:
 		move.l	-(a0),d1			;d1 = y.B, x.B, gfx.B, flags.B.
 		swap	d1				;d1 = gfx.B, flags.B, y.B, x.B.
 		moveq.l	#0,d2
 		move.b	d1,d2				;d2 = x.B.
 		cmp.w	#160+8,d2			;crossed the right border?
-		bge.w	aga_next_spr			;yes.
+		bhs.w	aga_next_spr			;yes.
 
 		moveq.l	#0,d3
 		ror.w	#8,d1				;d1 = gfx.B, flags.B, x.B, y.B.
@@ -459,11 +479,11 @@ sspr_aga_c8xq:	cmp.b	#10,aga_spr_amount		;max sprites (h/w limit)?
 		add.b	#16,d4				;y position fix.
 		move.l	d4,d6
 		cmp.w	d3,d4				;scanline lower?
-		blt.w	aga_next_spr			;yes.
+		blo.w	aga_next_spr			;yes.
 		move.l	d3,d7
 		add.l	sprite_y,d7
 		cmp.w	d7,d4				;scanline higher?
-		bgt.w	aga_next_spr			;yes.
+		bhi.w	aga_next_spr			;yes.
 
 		move.l	d5,d7
 		lsl.w	#8,d7

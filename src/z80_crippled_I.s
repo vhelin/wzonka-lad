@@ -3685,7 +3685,7 @@ z80_optcode_88:	btst	#0,d4					;carry?
 		ror.w	#8,d1					;b down.
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d1,d3					;a = a + b + c.
 		move.w	CCR,d4					;status updated.
 
@@ -3712,7 +3712,7 @@ z80_optcode_89:	btst	#0,d4					;carry?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d1,d3					;a = a + c + c.
 		move.w	CCR,d4					;status updated.
 
@@ -3738,7 +3738,7 @@ z80_optcode_8A:	btst	#0,d4					;carry?
 		ror.w	#8,d0					;d down.
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d0,d3					;a = a + d + c.
 		move.w	CCR,d4					;status updated.
 
@@ -3765,7 +3765,7 @@ z80_optcode_8B:	btst	#0,d4					;carry?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d0,d3					;a = a + e + c.
 		move.w	CCR,d4					;status updated.
 
@@ -3791,7 +3791,7 @@ z80_optcode_8C:	btst	#0,d4					;carry?
 		ror.w	#8,d2					;h down.
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d2,d3					;a = a + h + c.
 		move.w	CCR,d4					;status updated.
 
@@ -3818,7 +3818,7 @@ z80_optcode_8D:	btst	#0,d4					;carry?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d2,d3					;a = a + l + c.
 		move.w	CCR,d4					;status updated.
 
@@ -3847,7 +3847,7 @@ z80_optcode_8E:	btst	#0,d4					;carry?
 		blt.s	read_to_2
 
 		move.b	(a3,d2.l),d6
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d6,d3					;a = a + d + c.
 		move.w	CCR,d4
 
@@ -3855,7 +3855,7 @@ z80_optcode_8E:	btst	#0,d4					;carry?
 		cnop	0,4
 
 read_to_2:	move.b	(a2,d2.l),d6
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d6,d3					;a = a + d + c.
 		move.w	CCR,d4
 
@@ -3880,7 +3880,7 @@ z80_optcode_8F:	btst	#0,d4					;carry?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d3,d3					;a = a + d + c.
 		move.w	CCR,d4					;status updated.
 
@@ -4090,7 +4090,7 @@ z80_optcode_98:	btst	#0,d4					;c = 0?
 		ror.w	#8,d1					;b down.
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d1,d3					;a = a - b - c.
 		move.w	CCR,d4					;status updated.
 
@@ -4117,7 +4117,7 @@ z80_optcode_99:	btst	#0,d4					;c = 0?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d1,d3					;a = a - c - c.
 		move.w	CCR,d4					;status updated.
 
@@ -4143,7 +4143,7 @@ z80_optcode_9A:	btst	#0,d4					;c = 0?
 		ror.w	#8,d0					;d down.
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d0,d3					;a = a - d - c.
 		move.w	CCR,d4					;status updated.
 
@@ -4170,7 +4170,7 @@ z80_optcode_9B:	btst	#0,d4					;c = 0?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d0,d3					;a = a - e - c.
 		move.w	CCR,d4					;status updated.
 
@@ -4196,7 +4196,7 @@ z80_optcode_9C:	btst	#0,d4					;c = 0?
 		ror.w	#8,d2					;h down.
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d2,d3					;a = a - h - c.
 		move.w	CCR,d4					;status updated.
 
@@ -4223,7 +4223,7 @@ z80_optcode_9D:	btst	#0,d4					;c = 0?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d2,d3					;a = a - l - c.
 		move.w	CCR,d4					;status updated.
 
@@ -4252,7 +4252,7 @@ z80_optcode_9E:	btst	#0,d4					;c = 0?
 		blt.s	read_to_3
 
 		move.b	(a3,d2.l),d6
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d6,d3					;a = a - d - c.
 		move.w	CCR,d4
 
@@ -4260,7 +4260,7 @@ z80_optcode_9E:	btst	#0,d4					;c = 0?
 		cnop	0,4
 
 read_to_3:	move.b	(a2,d2.l),d6
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d6,d3					;a = a - d - c.
 		move.w	CCR,d4
 
@@ -4285,7 +4285,7 @@ z80_optcode_9F:	btst	#0,d4					;c = 0?
 
 		subq.l	#1,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d3,d3					;a = a - a - c.
 		move.w	CCR,d4					;status updated.
 
@@ -5479,7 +5479,7 @@ z80_optcode_CE:	btst	#0,d4					;c = 0?
 		move.b	(a0)+,d6
 		subq.l	#2,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		addx.b	d6,d3					;a = a + c + c.
 		move.w	CCR,d4					;status updated.
 
@@ -5950,7 +5950,7 @@ z80_optcode_DE:	btst	#0,d4					;c = 0?
 		move.b	(a0)+,d6
 		subq.l	#2,a5					;less cycles.
 
-		move.w	#%10000,CCR				;x = 1!
+		move.w	#%10100,CCR				;x = 1!
 		subx.b	d6,d3					;a = a - d - c.
 		move.w	CCR,d4					;status updated.
 

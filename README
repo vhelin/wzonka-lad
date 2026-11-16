@@ -37,8 +37,20 @@ v1.03.00:
               conditional is closed, matching the full core
             * A missing startup library or key file is reported
               on the console before exit
+            * DMG OAM corruption is assembled only when
+              GAMEBOY_OAM_BUG is 1. It defaults to 0, so
+              inc/dec and ld (hl+/-) do not alter other
+              OAM entries
+            * ADC and SBC set Z when the result byte is 0.
+              The carry path presets Z as well as X, because
+              ADDX and SUBX leave Z unchanged on zero. The
+              crippled core has the same fix
+            * Line-by-line sprite drawing walks OAM from
+              sprite 0 and draws higher indices first, so
+              sprite 0 is in front. Every sprite on the line
+              is drawn
 
 v1.02.00:
 
 2003-12-23: * Added few missing files (the routines directory)
-2003-08-11: * Initial release
+2003-08-11: * Initial GPL 2 release

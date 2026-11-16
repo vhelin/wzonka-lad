@@ -72,6 +72,8 @@ v1.10.00:
             * Powering the APU off clears envelope and
               sweep state, so the channel stays silent
             * Sprite drawing optimizations
+            * Window mode obeys now "OS screen speed
+              limit" setting)
 
 v1.02.00:
 

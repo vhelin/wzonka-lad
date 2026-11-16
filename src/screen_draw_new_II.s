@@ -1194,6 +1194,22 @@ cyber_screen_data_exit:
 
 output_the_data:move.l	wzonka_ptr,a0
 		move.l	wd_RPort(a0),a0
+		tst.b	os_screen_speed_limit
+		beq.w	output_the_data_rest
+		movem.l	d2/d3/a0/a2,-(SP)
+		tst.b	forbid_permit_status	;multitasking?
+		bne.s	window_sync_wait		;yes.
+		move.l	exec_base,a6
+		jsr	Permit(a6)
+window_sync_wait:
+		move.l	graphics_base,a6
+		jsr	WaitTOF(a6)			;sync to the monitor.
+		tst.b	forbid_permit_status
+		bne.s	window_sync_done
+		move.l	exec_base,a6
+		jsr	Forbid(a6)
+window_sync_done:
+		movem.l	(SP)+,d2/d3/a0/a2
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		output the data - rest

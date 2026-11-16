@@ -401,12 +401,35 @@ scan_aga_sprs:	move.l	aga_sprs_inactive,a0
 		lea	(a1,d3.l),a2			; 1.
 		lea	(a2,d3.l),a3			; 2.
 		lea	(a3,d3.l),a4			; 3.
-		moveq.l	#(160+64)/8/4-1,d1
-empty_spr_do:	clr.l	(a1)+
-		clr.l	(a2)+
-		clr.l	(a3)+
-		clr.l	(a4)+
-		dbra	d1,empty_spr_do			;clear this scanline.
+		moveq.l	#0,d0				;clear this scanline.
+		move.l	d0,(a1)
+		move.l	d0,4(a1)
+		move.l	d0,8(a1)
+		move.l	d0,12(a1)
+		move.l	d0,16(a1)
+		move.l	d0,20(a1)
+		move.l	d0,24(a1)
+		move.l	d0,(a2)
+		move.l	d0,4(a2)
+		move.l	d0,8(a2)
+		move.l	d0,12(a2)
+		move.l	d0,16(a2)
+		move.l	d0,20(a2)
+		move.l	d0,24(a2)
+		move.l	d0,(a3)
+		move.l	d0,4(a3)
+		move.l	d0,8(a3)
+		move.l	d0,12(a3)
+		move.l	d0,16(a3)
+		move.l	d0,20(a3)
+		move.l	d0,24(a3)
+		move.l	d0,(a4)
+		move.l	d0,4(a4)
+		move.l	d0,8(a4)
+		move.l	d0,12(a4)
+		move.l	d0,16(a4)
+		move.l	d0,20(a4)
+		move.l	d0,24(a4)
 		clr.b	(a0)				;emptied.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -431,6 +454,7 @@ sspr_aga_begin:	move.l	gb_memory,a0
 		add.l	#$fe00,a0			;a0 = sprite 0.
 		move.l	gb_scanlines,d4
 		add.b	#16,d4			;ly + 16.
+		move.l	sprite_y,d5
 		lea	spr_pick,a6
 		moveq.l	#0,d2
 		moveq.l	#40-1,d0
@@ -438,10 +462,11 @@ sspr_aga_pick:	move.l	(a0)+,d1			;y, x, tile, flags.
 		move.l	d1,d3
 		swap	d3
 		lsr.w	#8,d3			;d3 = y.
+		beq.s	sspr_aga_pick_x
 		cmp.w	d3,d4			;line above the sprite?
 		blo.s	sspr_aga_pick_x		;yes.
-		move.l	d3,d6
-		add.l	sprite_y,d6
+		move.w	d3,d6
+		add.w	d5,d6
 		cmp.w	d6,d4			;line below the sprite?
 		bhi.s	sspr_aga_pick_x		;yes.
 		move.l	d1,(a6)+
@@ -452,6 +477,16 @@ sspr_aga_picked:	tst.b	d2
 		move.l	a6,a0			;draw the last pick first.
 		move.l	d2,d0
 		subq.l	#1,d0
+		move.l	d4,d6				;d4 = the scanline number.
+		sub.w	#16,d6				;y position fix.
+		move.l	d6,d7
+		lsl.w	#8,d7
+		lsl.w	#6,d6
+		add.w	d7,d6				;y on screen.
+		add.w	#64/8-1,d6			;aga h/w position fix.
+		move.l	aga_map_inactive,a2
+		add.l	d6,a2
+		move.l	x_flip_table,a3
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		sprite size 8xq, q=8/16.
@@ -474,25 +509,9 @@ sspr_aga_c8xq:
 		ror.w	#8,d1				;d1 = gfx.B, flags.B, x.B, y.B.
 		move.b	d1,d3				;d3 = y.B.
 
-		move.l	gb_scanlines,d4			;d4 = the scanline number.
-		move.l	d4,d5
-		add.b	#16,d4				;y position fix.
+		move.l	a2,a4				;a4 = output spr (p0).
 		move.l	d4,d6
-		cmp.w	d3,d4				;scanline lower?
-		blo.w	aga_next_spr			;yes.
-		move.l	d3,d7
-		add.l	sprite_y,d7
-		cmp.w	d7,d4				;scanline higher?
-		bhi.w	aga_next_spr			;yes.
-
-		move.l	d5,d7
-		lsl.w	#8,d7
-		lsl.w	#6,d5
-		add.w	d7,d5				;y on screen.
-		move.l	aga_map_inactive,a4
-		add.l	#64/8-1,d5			;aga h/w position fix.
 		sub.l	d3,d6				;d6 = y inside the sprite.
-		add.l	d5,a4				;a4 = output spr (p0).
 
 		rol.l	#8,d1				;d1 = flags.B, x.B, y.B, gfx.B.
 		and.b	sprite_mask,d1
@@ -502,8 +521,7 @@ sspr_aga_c8xq:
 		rol.l	#8,d1				;d1 = x.B, y.B, gfx.B, flags.B.
 		btst	#6,d1				;y flipped?
 		beq.s	no_aga_spr_yf			;nope.
-		move.b	sprite_y+3,d4
-		eor.b	d4,d6				;y flipped.
+		eor.b	d5,d6				;y flipped.
 
 no_aga_spr_yf:	lsl.b	#1,d6				;y = y * 2 (for data).
 		moveq.l	#0,d7
@@ -511,16 +529,16 @@ no_aga_spr_yf:	lsl.b	#1,d6				;y = y * 2 (for data).
 		move.w	(a1,d3.l),d7			;d7 = pattern data.
 		beq.w	aga_next_spr			;empty sprite.
 
-		addq.b	#1,aga_spr_amount		;one sprite more.
+		add.l	#$10000,d0			;one sprite more.
 
 		btst	#5,d1				;x flipped?
 		beq.s	no_aga_spr_xf			;no.
-		move.l	x_flip_table,a3
 		move.w	(a3,d7.l*2),d7			;fetch the x flipped data.
 
-no_aga_spr_xf:	move.l	d2,d4				;d4 = x.B.
-		lsr.b	#3,d4				;d4 = x.B / 8.
-		add.l	d4,a4				;y and x fixed.
+no_aga_spr_xf:	moveq.l	#0,d3
+		move.b	d2,d3				;d4 = x.B.
+		lsr.b	#3,d3				;d4 = x.B / 8.
+		add.l	d3,a4				;y and x fixed.
 
 		btst	#4,d1				;which palette?
 		bne.s	aga_spr_p1
@@ -552,4 +570,6 @@ aga_spr_out:	moveq.l	#0,d3
 		and.w	d6,40(a5)
 
 aga_next_spr:	dbra	d0,sspr_aga_c8xq		;next sprite.
+		swap	d0
+		move.b	d0,aga_spr_amount
 aga_spr_exit:	rts

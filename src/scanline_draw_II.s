@@ -270,6 +270,7 @@ sspr_pick:	move.l	gb_memory,a0
 		add.l	#$fe00,a0			;sprite 0.
 		move.l	gb_scanlines,d4
 		add.l	#16,d4			;ly + 16.
+		move.l	sprite_y,d5
 		lea	spr_pick,a6
 		moveq.l	#0,d2
 		moveq.l	#40-1,d0
@@ -277,10 +278,11 @@ sspr_pick_n:	move.l	(a0)+,d1			;y, x, tile, flags.
 		move.l	d1,d3
 		swap	d3
 		lsr.w	#8,d3			;d3 = y.
+		beq.s	sspr_pick_x
 		cmp.w	d3,d4			;line above the sprite?
 		blo.s	sspr_pick_x		;yes.
-		move.l	d3,d6
-		add.l	sprite_y,d6
+		move.w	d3,d6
+		add.w	d5,d6
 		cmp.w	d6,d4			;line below the sprite?
 		bhi.s	sspr_pick_x		;yes.
 		move.l	d1,(a6)+
@@ -291,6 +293,19 @@ sspr_picked:	tst.b	d2
 		move.l	a6,a0			;draw the last pick first.
 		move.l	d2,d0
 		subq.l	#1,d0
+		swap	d0
+		move.w	d4,d0
+		swap	d0
+		move.l	d4,d6				;d4 = the scanline number.
+		sub.l	#16,d6				;y position fix.
+		move.l	d6,d7
+		lsl.w	#4,d6
+		lsl.w	#2,d7
+		add.w	d7,d6				;d5 = y on screen (d5 * 20).
+		move.l	bitmap_spc,a6
+		add.l	d6,a6
+		move.l	bitmap_bg,a3
+		add.l	d6,a3
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		sprite size 8xq, q=8/16.
@@ -314,27 +329,12 @@ sspr_c8xq:
 		ror.w	#8,d1				;d1 = gfx.B, flags.B, x.B, y.B.
 		move.b	d1,d3				;d3 = y.B.
 
-		move.l	gb_scanlines,d4			;d4 = the scanline number.
-		move.l	d4,d5
-		add.l	#16,d4				;y position fix.
+		swap	d0
+		moveq.l	#0,d4
+		move.w	d0,d4				;d4 = the scanline number.
+		swap	d0
 		move.l	d4,d6
-		cmp.w	d3,d4				;scanline lower?
-		blo.w	next_spr			;yes.
-		move.l	d3,d7
-		add.l	sprite_y,d7
-		cmp.w	d7,d4				;scanline higher?
-		bhi.w	next_spr			;yes.
-
-		move.l	d5,d7
-		lsl.w	#4,d5
-		lsl.w	#2,d7
-		add.w	d7,d5				;d5 = y on screen (d5 * 20).
-
 		sub.l	d3,d6				;d6 = y inside the sprite.
-		move.l	bitmap_spc,a4
-		move.l	d5,a5				;a5 = output bg  (p0).
-		add.l	d5,a4				;a4 = output spr (p0).
-		add.l	bitmap_bg,a5
 
 		rol.l	#8,d1				;d1 = flags.B, x.B, y.B, gfx.B.
 		and.b	sprite_mask,d1
@@ -364,7 +364,9 @@ spr_y_back:	lsl.b	#1,d6				;y = y * 2 (for data).
 		btst	#5,d1				;x flipped?
 		bne.w	sspr_c8xq_copyx			;yes.
 
-spr_x_back:	lsr.w	#8,d1				;d1 = x.B, y.B, 0.B, pal.B.
+spr_x_back:	move.l	a6,a4				;a4 = output spr (p0).
+		move.l	a3,a5				;a5 = output bg  (p0).
+		lsr.w	#8,d1				;d1 = x.B, y.B, 0.B, pal.B.
 		cmp.w	#8,d2				;x < 8?
 		blo.s	spr_less_8			;yes.
 		cmp.w	#8+160-8,d2			;152 < x < 160?
@@ -487,8 +489,8 @@ spr_over_152:	add.l	#(160/8)-2,a4
 		dbra	d0,sspr_c8xq			;next sprite.
 		rts
 
-sspr_c8xq_copyx:move.l	x_flip_table,a3
-		move.w	(a3,d7.l*2),d7			;fetch the x flipped data.
+sspr_c8xq_copyx:move.l	x_flip_table,a4
+		move.w	(a4,d7.l*2),d7			;fetch the x flipped data.
 		bra.w	spr_x_back
 
 sspr_c8xq_flip:	move.b	sprite_y+3,d4

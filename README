@@ -71,6 +71,7 @@ v1.10.00:
               a room change can silence what is playing
             * Powering the APU off clears envelope and
               sweep state, so the channel stays silent
+            * Sprite drawing optimizations
 
 v1.02.00:
 

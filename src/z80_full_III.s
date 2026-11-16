@@ -6234,7 +6234,7 @@ z80_optcode_C4:	btst	#2,d4					;z - flag set?
 		move.l	a0,d6
 		sub.l	z80_pc_base,d6
 		addq.w	#2,d6
-                bsr.w   write_d6_stackx
+                bsr.l   write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
 		subq.l	#3,a5
@@ -6347,7 +6347,7 @@ pead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram.
 
 z80_optcode_C7:	move.l	a0,d6
 		sub.l	z80_pc_base,d6
-		bsr.w	write_d6_stackx
+		bsr.l	write_d6_stackx
 
 		move.l	a3,a0
 		subq.l	#8,a5
@@ -6497,7 +6497,7 @@ z80_optcode_CC:	btst	#2,d4					;z - flag set?
 		move.l	a0,d6
 		sub.l	z80_pc_base,d6
 		addq.w	#2,d6
-                bsr.w   write_d6_stackx
+                bsr.l   write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
 		subq.l	#3,a5
@@ -6537,7 +6537,7 @@ z80_optc_CBCC:	subq.l	#2,a5					;less cycles.
 z80_optcode_CD:	move.l	a0,d6
 		sub.l	z80_pc_base,d6
 		addq.w	#2,d6
-                bsr.w   write_d6_stackx
+                bsr.l   write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
 		subq.l	#3,a5
@@ -6616,7 +6616,7 @@ lead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram.
 
 z80_optcode_CF:	move.l	a0,d6
 		sub.l	z80_pc_base,d6
-		bsr.w	write_d6_stackx
+		bsr.l	write_d6_stackx
 
 		lea	$8(a3),a0
 		subq.l	#8,a5
@@ -6764,7 +6764,7 @@ z80_optcode_D4:	btst	#0,d4					;c - flag set?
 		move.l	a0,d6
 		sub.l	z80_pc_base,d6
 		addq.w	#2,d6
-		bsr.w	write_d6_stackx
+		bsr.l	write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
 		subq.l	#3,a5
@@ -6878,7 +6878,7 @@ aead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram.
 
 z80_optcode_D7:	move.l	a0,d6
 		sub.l	z80_pc_base,d6
-		bsr.w	write_d6_stackx
+		bsr.l	write_d6_stackx
 
 		lea	$10(a3),a0
 		subq.l	#8,a5
@@ -6945,13 +6945,13 @@ z80_optcode_D9:	subq.l	#2,a5					;less cycles.
 		move.l	a3,z80_pc_base				;rom base.
 		lea	(a3,d7.l),a0
 
-		bra.w	reti_back
+		bra.l	reti_back
 		cnop	0,4
 
 pc_in_ram_xv:	move.l	a2,z80_pc_base				;ram base.
 		lea	(a2,d7.l),a0
 
-		bra.w	reti_back
+		bra.l	reti_back
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -7027,7 +7027,7 @@ z80_optcode_DC:	btst	#0,d4					;c - flag set?
 		move.l	a0,d6
 		sub.l	z80_pc_base,d6
 		addq.w	#2,d6
-		bsr.w	write_d6_stackx
+		bsr.l	write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
 		subq.l	#3,a5

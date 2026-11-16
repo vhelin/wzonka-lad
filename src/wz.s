@@ -10,19 +10,19 @@
 		include	"graphics/gfx.i"
 		include	"graphics/gfxbase.i"
 		include	"dos/dos.i"
-		include	"reqtools.i"
-		include	"intuition_lib.i"
-		include	"diskfont_lib.i"
-		include	"graphics_lib.i"
-		include	"exec_lib.i"
-		include	"lowlevel.i"
-		include	"dos_lib.i"
-		include	"reqtools_lib.i"
-		include	"xpkmaster_lib.i"
+		include	"libraries/reqtools.i"
+		include	"intuition/intuition.i"
+		include	"diskfont/diskfont.i"
+		include	"graphics/gfx.i"
+		include	"custom/exec_lib.i"
+		;include	"lowlevel.i"
+		include	"dos/dos_lib.i"
+		include	"libraries/reqtools_lib.i"
+		include	"lvo/xpkmaster_lib.i"
 		include	"xpk/xpk.i"
-		include	"custom.i"
-		include	"controlpad.i"
-		include	"gadtools_lib.i"
+		include	"custom/custom.i"
+		;include	"controlpad.i"
+		include	"libraries/gadtools.i"
 		include	"graphics/displayinfo.i"
 
 		include	"cybergraphics/cybergraphics.i"
@@ -34,15 +34,13 @@
 		include	"libraries/gadtools.i"
 		include	"exec/io.i"
 
-		include	"ahi_lib.i"
-		include	"devices/ahi.i"
+		include	"ahi/ahi_lib.i"
+		include	"ahi/ahi.i"
 
-		incdir	"binworld:gameboy/"
-		include	"screens.i"
-
-		include	"iconstartup.i"
-
-		include	"z80_mode.i"
+		include	"binworld:wzonka-lad/src/short_lvo.i"
+		include	"binworld:wzonka-lad/src/screens.i"
+		include	"binworld:wzonka-lad/src/iconstartup.i"
+		include	"binworld:wzonka-lad/src/z80_mode.i"
 
 GAMEBOY_DEBUG		=0				;0 = n / 1 = y.
 GAMEBOY_SERIAL		=0				;0 = n / 1 = y.
@@ -56,19 +54,19 @@ key_serial_area =8
 		ENDIF
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-PGA_Dummy		=(TAG_USER+$31000)
-PGA_Freedom		=(PGA_Dummy+$0001)
+;PGA_Dummy		=(TAG_USER+$31000)
+;PGA_Freedom		=(PGA_Dummy+$0001)
 
-STRINGA_Dummy		=(TAG_USER+$32000)
-STRINGA_Justification	=(STRINGA_Dummy+$0010)
-STRINGA_ReplaceMode	=(STRINGA_Dummy+$000D)
+;STRINGA_Dummy		=(TAG_USER+$32000)
+;STRINGA_Justification	=(STRINGA_Dummy+$0010)
+;STRINGA_ReplaceMode	=(STRINGA_Dummy+$000D)
 
-GA_Dummy                =(TAG_USER+$30000)
-GA_Disabled             =(GA_Dummy+$000E)
-GA_TabCycle		=(GA_Dummy+$0024)
+;GA_Dummy                =(TAG_USER+$30000)
+;GA_Disabled             =(GA_Dummy+$000E)
+;GA_TabCycle		=(GA_Dummy+$0024)
 
-LORIENT_HORIZ		=1
-LORIENT_VERT		=2
+;LORIENT_HORIZ		=1
+;LORIENT_VERT		=2
 
 JPB_BUTTON_BLUE		=23				;blue.
 JPB_BUTTON_RED		=22				;red.
@@ -9353,7 +9351,7 @@ input_irq_exit:	rts
 
 		IFEQ	GAMEBOY_USERS
 snd_high_do:	tst.l	ahi_base
-		beq.s	snd_high_back
+		beq.w	snd_high_back
 
 		tst.b	snd_chnlI
 		bne.w	snd_high_no_I_f
@@ -11680,8 +11678,8 @@ pull_z80:	lea	z80_registers,a6
 		IFEQ	GAMEBOY_USERS
 		include	"sound_routines.s"
 		ENDIF
-		include	"/routines/list_alloc_32bit.s"
-		include	"/routines/load!bitplanes.s"
+		include	"binworld:wzonka-lad/src/routines/list_alloc_32bit.s"
+		include	"binworld:wzonka-lad/src/routines/load!bitplanes.s"
 		include	"rle_unpacker.s"
 		include	"screen_draw_new_II.s"
 		include	"aga_screen_draw.s"

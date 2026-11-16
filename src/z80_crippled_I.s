@@ -5797,13 +5797,13 @@ z80_optcode_D9:	subq.l	#2,a5					;less cycles.
 		move.l	a3,z80_pc_base				;rom base.
 		lea	(a3,d7.l),a0
 
-		bra.w	reti_back
+		bra.l	reti_back
 		cnop	0,4
 
 pc_in_ram_xv:	move.l	a2,z80_pc_base				;ram base.
 		lea	(a2,d7.l),a0
 
-		bra.w	reti_back
+		bra.l	reti_back
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -6606,7 +6606,7 @@ z80_optc_CBFA:	subq.l	#2,a5					;less cycles.
 z80_optcode_FB:	subq.l	#1,a5
 		clr.b	i_flag					;interrupts enabled.
 
-		bra.w	reti_back
+		bra.l	reti_back
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

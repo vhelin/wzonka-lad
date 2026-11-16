@@ -30,6 +30,7 @@ xRTSC_DisplayID		equ	RTSC_DisplayID
 OpenLibrary	equ	_LVOOpenLibrary
 Open	equ	_LVOOpen
 Write	equ	_LVOWrite
+Output	equ	_LVOOutput
 LockPubScreen	equ	_LVOLockPubScreen
 GetVisualInfoA	equ	_LVOGetVisualInfoA
 CreateMsgPort	equ	_LVOCreateMsgPort

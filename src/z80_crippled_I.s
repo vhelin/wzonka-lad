@@ -3216,8 +3216,16 @@ z80_optc_CB75:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_76:	subq.l	#1,a5
 		tst.b	i_flag
-		bne.s	z80_optcode_76_skip
+		beq.s	z80_optcode_76_halt			;ime on: wait.
 
+		move.l	a2,a6
+		add.l	#$ff00,a6
+		move.b	$0f(a6),d7				;if.
+		and.b	$ff(a6),d7				;ie & if.
+		and.b	#%11111,d7
+		bne.s	z80_optcode_76_skip			;pending: halt bug.
+
+z80_optcode_76_halt:
 		move.b	#2,z80_halt				;z80 stopped!
 		rts
 
@@ -3232,6 +3240,7 @@ z80_optcode_76_skip:
 		move.b	(a0),d7
 		lsl.w	#8,d7					;d0 = d0*256.
 		jmp	(a1,d7.l)				;jump and emulate.
+		ENDIF
 
 		cnop	0,4
 f_xit_xit:	rts

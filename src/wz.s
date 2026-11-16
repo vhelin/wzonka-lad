@@ -149,37 +149,37 @@ gb_emu:		movem.l	d2-d7/a2-a6,-(SP)
 		moveq.l	#0,d0
 		jsr	OpenLibrary(a6)
 		move.l	d0,disk_font_base
-		beq.w	quit
+		beq.w	missing_diskfont
 
 		lea	dos_name,a1
 		moveq.l	#39,d0
 		jsr	OpenLibrary(a6)
 		move.l	d0,dos_base
-		beq.w	quit
+		beq.w	missing_dos
 
 		lea	graphics_name,a1
 		moveq.l	#39,d0
 		jsr	OpenLibrary(a6)
 		move.l	d0,graphics_base
-		beq.w	quit
+		beq.w	missing_graphics
 
 		lea	intuition_name,a1
 		moveq.l	#39,d0
 		jsr	OpenLibrary(a6)
 		move.l	d0,intuition_base
-		beq.w	quit
+		beq.w	missing_intuition
 
 		lea	req_tools_name,a1
 		moveq.l	#38,d0
 		jsr	OpenLibrary(a6)
 		move.l	d0,req_tools_base
-		beq.w	quit
+		beq.w	missing_reqtools
 
 		lea	gad_tools_name,a1
 		moveq.l	#38,d0
 		jsr	OpenLibrary(a6)
 		move.l	d0,gad_tools_base
-		beq.w	quit
+		beq.w	missing_gadtools
 
 		IFEQ	GAMEBOY_USERS
 
@@ -351,7 +351,7 @@ gb_emu:		movem.l	d2-d7/a2-a6,-(SP)
 		bsr.w	load_key
 
 		tst.b	key_status
-		beq.w	quit				;no key!!!
+		beq.w	missing_key			;no key!!!
 
 		move.l	exec_base,a6
 		jsr	CacheClearU(a6)			;clear the cache first.
@@ -6001,6 +6001,31 @@ delete_five_gbs_exit:
 ;		quit / exit
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+missing_diskfont:
+		lea	err_diskfont,a0
+		bra.s	missing_say
+missing_dos:
+		lea	err_dos,a0
+		bra.s	missing_say
+missing_graphics:
+		lea	err_graphics,a0
+		bra.s	missing_say
+missing_intuition:
+		lea	err_intuition,a0
+		bra.s	missing_say
+missing_reqtools:
+		lea	err_reqtools,a0
+		bra.s	missing_say
+missing_gadtools:
+		lea	err_gadtools,a0
+		bra.s	missing_say
+
+		IFEQ	GAMEBOY_USERS
+missing_key:	lea	err_key,a0
+		ENDIF
+
+missing_say:	bsr.w	console_error
+
 quit:
 		IFGT	GAMEBOY_SERIAL
 
@@ -6152,6 +6177,48 @@ no_message_port:lea	gfx_game_still_tmp_map_attr,a1
 
 		movem.l	(SP)+,d2-d7/a2-a6		;unstack!
 		moveq.l	#0,d0				;no errors.
+		rts
+
+console_error:	movem.l	d2-d4/a2/a5/a6,-(SP)
+		move.l	a0,a2
+		move.l	dos_base,d4
+		bne.s	console_error_use
+
+		move.l	exec_base,a6
+		lea	dos_name,a1
+		moveq.l	#0,d0
+		jsr	OpenLibrary(a6)
+		move.l	d0,d4
+		beq.s	console_error_out
+		move.l	d0,a6
+		bsr.s	console_error_write
+		move.l	d4,a1
+		move.l	exec_base,a6
+		jsr	CloseLibrary(a6)
+		bra.s	console_error_out
+
+console_error_use:
+		move.l	d4,a6
+		bsr.s	console_error_write
+
+console_error_out:
+		movem.l	(SP)+,d2-d4/a2/a5/a6
+		rts
+
+console_error_write:
+		jsr	Output(a6)
+		move.l	d0,d1
+		beq.s	console_error_write_x
+		move.l	a2,a5
+		move.l	a2,d2
+console_error_len:
+		tst.b	(a5)+
+		bne.s	console_error_len
+		subq.l	#1,a5
+		sub.l	a2,a5
+		move.l	a5,d3
+		jsr	Write(a6)
+console_error_write_x:
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -11723,6 +11790,23 @@ keyboard_device_name:
 cyber_name:	dc.b	"cybergraphics.library",0
 		even
 
+err_diskfont:	dc.b	"Wzonka-Lad: could not open diskfont.library.",10,0
+		even
+err_dos:	dc.b	"Wzonka-Lad: could not open dos.library v39.",10,0
+		even
+err_graphics:	dc.b	"Wzonka-Lad: could not open graphics.library v39.",10,0
+		even
+err_intuition:	dc.b	"Wzonka-Lad: could not open intuition.library v39.",10,0
+		even
+err_reqtools:	dc.b	"Wzonka-Lad: could not open reqtools.library v38.",10,0
+		even
+err_gadtools:	dc.b	"Wzonka-Lad: could not open gadtools.library v38.",10,0
+		even
+		IFEQ	GAMEBOY_USERS
+err_key:	dc.b	"Wzonka-Lad: Wzonka-Lad.KEY not found in PROGDIR: or L:.",10,0
+		even
+		ENDIF
+
 exec_base:	dc.l	0
 intuition_base:	dc.l	0
 graphics_base:	dc.l	0
@@ -12443,7 +12527,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad 1.02.00"
+menu_title:	dc.b	"Wzonka-Lad 1.03.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -12691,7 +12775,7 @@ misc_txt_2:	dc.b	"GameGenie patch code",0
 ;		menu gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_scr_txt:	dc.b	"Wzonka-Lad 1.02.00"
+menu_scr_txt:	dc.b	"Wzonka-Lad 1.03.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -13639,7 +13723,7 @@ about_text_2:	dc.b	1
 		dc.l	about_txt_2
 		dc.l	0
 
-about_txt_1:	dc.b	"WZONKA-LAD 1.02.00"
+about_txt_1:	dc.b	"WZONKA-LAD 1.03.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"R"
 		ELSE
@@ -14111,13 +14195,13 @@ misc_win_txt:	dc.b	"Misc settings",0
 ;		the version string
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-version_data:	dc.b	"$VER: Wzonka-Lad 1.02.00"
+version_data:	dc.b	"$VER: Wzonka-Lad 1.03.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
 		dc.b	"e"
 		ENDIF
-		dc.b	" (14.08.99)",0
+		dc.b	" (16.11.2026)",0
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

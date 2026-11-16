@@ -21,5 +21,24 @@ responsibility for anything.
 
 2. (GPL'ed RELEASE) HISTORY
 
+v1.03.00:
+
+2026-11-16: * DAA sets Z from the adjusted accumulator
+            * ADD HL,BC / ADD HL,DE / ADD HL,SP set H from
+              the carry out of bit 11
+            * CCF sets H from the old carry, then complements C
+            * HALT with interrupts disabled waits. The halt bug
+              runs only when an enabled interrupt is already
+              pending. A halted CPU resumes, without servicing
+              the interrupt, when one becomes pending while
+              interrupts stay disabled. STOP is left halted
+            * The crippled core has the same HALT fix. It does
+              not emulate DAA or the H flag. Its HALT debug
+              conditional is closed, matching the full core
+            * A missing startup library or key file is reported
+              on the console before exit
+
+v1.02.00:
+
 2003-12-23: * Added few missing files (the routines directory)
 2003-08-11: * Initial release

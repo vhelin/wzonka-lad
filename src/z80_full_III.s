@@ -147,7 +147,7 @@ daa_hnc:	move.b	d3,d6
 		add.b	#$9a,d3
 		or.b	#%1,d4					;c = 1!
 
-daa_exit_000:	fetch_next_i
+daa_exit_000:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -164,7 +164,7 @@ daa_000:	move.b	d3,d6
 ;		add.b	#$00,d3
 		and.b	#%11111110,d4				;c = 0!
 
-		fetch_next_i
+		bra.w	daa_set_z
 
 daa_000_2:	cmp.b	#8,d6					;h.
 		bgt.s	daa_000_3
@@ -174,7 +174,7 @@ daa_000_2:	cmp.b	#8,d6					;h.
 		add.b	#$06,d3
 		and.b	#%11111110,d4				;c = 0!
 
-		fetch_next_i
+		bra.w	daa_set_z
 
 daa_000_3:	cmp.b	#$A,d6					;h.
 		blt.s	daa_000_4
@@ -184,7 +184,7 @@ daa_000_3:	cmp.b	#$A,d6					;h.
 		add.b	#$60,d3
 		or.b	#%1,d4					;c = 1!
 
-		fetch_next_i
+		bra.w	daa_set_z
 
 daa_000_4:	cmp.b	#9,d6					;h.
 		blt.s	daa_exit_001
@@ -194,7 +194,7 @@ daa_000_4:	cmp.b	#9,d6					;h.
 		add.b	#$66,d3
 		or.b	#%1,d4					;c = 1!
 
-daa_exit_001:	fetch_next_i
+daa_exit_001:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -211,7 +211,7 @@ daa_00c:	move.b	d3,d6
 		add.b	#$60,d3
 		or.b	#%1,d4					;c = 1!
 
-		fetch_next_i
+		bra.w	daa_set_z
 
 daa_00c_2:	cmp.b	#2,d6					;h.
 		bgt.s	daa_exit_002
@@ -221,7 +221,7 @@ daa_00c_2:	cmp.b	#2,d6					;h.
 		add.b	#$66,d3
 		or.b	#%1,d4					;c = 1!
 
-daa_exit_002:	fetch_next_i
+daa_exit_002:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -238,7 +238,7 @@ daa_0n0:	move.b	d3,d6
 ;		add.b	#$00,d3
 		and.b	#%11111110,d4				;c = 0!
 
-daa_exit_003:	fetch_next_i
+daa_exit_003:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -255,7 +255,7 @@ daa_0nc:	move.b	d3,d6
 		add.b	#$a0,d3
 		or.b	#%1,d4					;c = 1!
 
-daa_exit_004:	fetch_next_i
+daa_exit_004:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -272,7 +272,7 @@ daa_h00:	move.b	d3,d6
 		add.b	#$06,d3
 		and.b	#%11111110,d4				;c = 0!
 
-		fetch_next_i
+		bra.w	daa_set_z
 
 daa_h00_2:	cmp.b	#$A,d6					;h.
 		blt.s	daa_exit_005
@@ -282,7 +282,7 @@ daa_h00_2:	cmp.b	#$A,d6					;h.
 		add.b	#$66,d3
 		or.b	#%1,d4					;c = 1!
 
-daa_exit_005:	fetch_next_i
+daa_exit_005:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -299,7 +299,7 @@ daa_h0c:	move.b	d3,d6
 		add.b	#$66,d3
 		or.b	#%1,d4					;c = 1!
 
-daa_exit_006:	fetch_next_i
+daa_exit_006:	bra.w	daa_set_z
 
 ;---------------------------------------------------------------------------------------
 
@@ -316,7 +316,12 @@ daa_hn0:	move.b	d3,d6
 		add.b	#$fa,d3
 		and.b	#%11111110,d4				;c = 0!
 
-daa_exit_007:	fetch_next_i
+daa_exit_007:
+daa_set_z:	and.b	#%11111011,d4				;z = 0.
+		tst.b	d3					;a = 0?
+		bne.s	daa_set_z_go
+		or.b	#%100,d4				;z = 1.
+daa_set_z_go:	fetch_next_i
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		trash the oam ram according to the hardware bug
@@ -635,23 +640,21 @@ z80_optc_CB08:	ror.w	#8,d1					;b down.
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		09 - ADD HL, BC - [n = 0, h = ?, c = x, z = z]
+;		09 - ADD HL, BC - [n = 0, h = x, c = x, z = z]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_09:	and.b	#%11111110,d4				;c = 0.
 		subq.l	#2,a5					;less cycles.
 
-		move.w	d1,d6
-		move.w	d2,d7
-		and.w	#%100000000000,d6
-		and.w	#%100000000000,d7
-		and.w	d6,d7
-		lsr.w	#8,d7
-		lsr.b	#2,d7
-		move.b	d7,h_the_flag				;h from bits 11.
-
+		move.w	d2,d6					;old hl.
 		add.w	d1,d2					;add hl, bc.
 		move.w	CCR,d7					;status updated.
+		eor.w	d2,d6
+		eor.w	d1,d6					;carry out of bit 11.
+		lsr.w	#8,d6
+		lsr.b	#4,d6
+		and.b	#%1,d6
+		move.b	d6,h_the_flag				;h = that carry.
 		and.w	#$ff,d3					;n = 0!
 		and.b	#%1,d7					;save carry.
 		or.b	d7,d4					;return the rest (z).
@@ -1162,23 +1165,21 @@ z80_optc_CB18:	subq.l	#2,a5					;less cycles.
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		19 - ADD HL, DE - [n = 0, h = ?, c = x, z = z]
+;		19 - ADD HL, DE - [n = 0, h = x, c = x, z = z]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_19:	subq.l	#2,a5					;less cycles.
 		and.b	#%11111110,d4				;save z.
 
-		move.w	d0,d6
-		move.w	d2,d7
-		and.w	#%100000000000,d6
-		and.w	#%100000000000,d7
-		and.w	d6,d7
-		lsr.w	#8,d7
-		lsr.b	#2,d7
-		move.b	d7,h_the_flag				;h from bits 11.
-
+		move.w	d2,d6					;old hl.
 		add.w	d0,d2					;hl = hl + de.
 		move.w	CCR,d7					;status updated.
+		eor.w	d2,d6
+		eor.w	d0,d6					;carry out of bit 11.
+		lsr.w	#8,d6
+		lsr.b	#4,d6
+		and.b	#%1,d6
+		move.b	d6,h_the_flag				;h = that carry.
 		and.w	#$ff,d3					;n = 0!
 		and.b	#%1,d7					;save c.
 		or.b	d7,d4					;return z.
@@ -2245,23 +2246,22 @@ z80_optc_CB38:	ror.w	#8,d1
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		39 - ADD HL, SP - [n = 0, h = ?, c = x, z = z]
+;		39 - ADD HL, SP - [n = 0, h = x, c = x, z = z]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_39:	subq.l	#2,a5					;less cycles.
 		and.b	#%11111110,d4				;save z.
 
-		move.w	d5,d6
-		move.w	d2,d7
-		and.w	#%100000000000,d6
-		and.w	#%100000000000,d7
-		and.w	d6,d7
-		lsr.w	#8,d7
-		lsr.b	#2,d7
-		move.b	d7,h_the_flag				;h from bits 11.
-
+		move.w	d2,d6					;old hl.
 		add.w	d5,d2					;hl = hl + sp.
 		move.w	CCR,d7					;status updated.
+		eor.w	d2,d6
+		eor.w	d5,d6					;carry out of bit 11.
+		lsr.w	#8,d6
+		lsr.b	#4,d6
+		and.b	#%1,d6
+		move.b	d6,h_the_flag				;h = that carry.
+
 		and.b	#%1,d7					;save carry.
 		and.w	#$ff,d3					;n = 0!
 		or.b	d7,d4					;return z.
@@ -2448,14 +2448,14 @@ z80_optc_CB3E:	subq.l	#4,a5
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		3F - CCF - [n = 0, h = ?, c = x, z = z]
+;		3F - CCF - [n = 0, h = x, c = x, z = z]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_3F:	subq.l	#1,a5					;less cycles.
-		bchg	#0,d4					;complement carry flag.
-		move.b	d3,d7
+		move.b	d4,d7
 		and.b	#%1,d7
-		move.b	d7,h_the_flag				;h = 0/1 (~random).
+		move.b	d7,h_the_flag				;h = old c.
+		bchg	#0,d4					;complement carry flag.
 
 		and.w	#$ff,d3					;n = 0!
 
@@ -4019,8 +4019,16 @@ z80_optc_CB75:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_76:	subq.l	#1,a5
 		tst.b	i_flag
-		bne.s	z80_optcode_76_skip
+		beq.s	z80_optcode_76_halt			;ime on: wait.
 
+		move.l	a2,a6
+		add.l	#$ff00,a6
+		move.b	$0f(a6),d7				;if.
+		and.b	$ff(a6),d7				;ie & if.
+		and.b	#%11111,d7
+		bne.s	z80_optcode_76_skip			;pending: halt bug.
+
+z80_optcode_76_halt:
 		move.b	#2,z80_halt				;z80 stopped!
 		rts
 

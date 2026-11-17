@@ -536,6 +536,25 @@
                        update the sample buffer more than 60 times
                        a second (usually >100 times faster).
 
+                 Triggers, DAC power, channel status and length timers
+                 are tracked between updates. Envelopes and frequency
+                 sweeps are omitted, as in Low mode. Short notes can
+                 still fall entirely between two output updates.
+
+                 All three modes use Game Boy stereo routing, separate
+                 left/right master volumes and the same pitch and noise
+                 clock calculations. High and Low support live wave RAM
+                 changes; prefer either of them for sampled speech.
+
+                 The AHI mixing frequency is separate from y. Selecting
+                 22050 or 44100 Hz can reduce output aliasing if the CPU
+                 and output driver can sustain the higher mixing rate.
+                 Sound remains sample-based rather than cycle-exact.
+
+                 Ultrasonic pulse/wave playback rates of 1048576 Hz or
+                 more are paused at the AHI output to prevent legacy
+                 AHI mixer lockups. Game Boy sound state is unchanged.
+
   @{b}Channels@{ub}
 
   - Turn   -->   Disable / enable channel.

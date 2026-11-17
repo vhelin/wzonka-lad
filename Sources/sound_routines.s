@@ -810,9 +810,11 @@ sound_V_0:	move.b	d6,(a2,d7.l)			;$ff24.
 ;		move.b	d6,sound_master_bits
 
 		move.b	1(a2,d7.l),d6
+		bra.s	sound_V_update
 
 sound_V_1:	move.b	d6,(a2,d7.l)			;$ff25.
 
+sound_V_update:
 		movem.l	d0-d3/a0-a2,-(SP)
 
 		lea	pan_table,a6

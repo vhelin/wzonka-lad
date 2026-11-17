@@ -51,9 +51,7 @@ debug_output_oam:
 		bra.w	debug_output_output_size
 
 debug_output_no_output:
-		move.b	(a0)+,d7
-		lsl.w	#8,d7					;d7 = d7*256.
-		jmp	(a1,d7.l)				;jump and emulate.
+		jmp	z80_fetch_opcode
 
 debug_output_ok:movem.l	d0-d7/a0-a6,-(SP)
 
@@ -194,16 +192,12 @@ debug_output_output_size:
 		sub.l	a5,a5
 		move.b	#1,debug_exit
 
-		move.b	(a0)+,d7
-		lsl.w	#8,d7					;d7 = d7*256.
-		jmp	(a1,d7.l)				;jump and emulate.
+		jmp	z80_fetch_opcode
 
 debug_output_exit:
 		movem.l	(SP)+,d0-d7/a0-a6
 
-		move.b	(a0)+,d7
-		lsl.w	#8,d7					;d7 = d7*256.
-		jmp	(a1,d7.l)				;jump and emulate.
+		jmp	z80_fetch_opcode
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		memory write debug routines
@@ -263,6 +257,35 @@ f_xita:		rts
 ;		z80 emulator, %1011 = znhc
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+add_sp_offset:	move.b	(a0)+,d6
+		move.w	d5,d7
+		add.b	d6,d7
+		move.w	CCR,d4
+		and.b	#1,d4
+		move.w	d5,d7
+		ext.w	d6
+		add.w	d6,d7
+		IFEQ	Z80_MODE
+		eor.w	d7,d6
+		eor.w	d5,d6
+		lsr.w	#4,d6
+		and.b	#1,d6
+		move.b	d6,h_the_flag
+		and.w	#$ff,d3
+		ENDIF
+		rts
+
+finish_ei:	move.l	a5,d6
+		subq.l	#1,d6					;remove the temporary one-cycle budget.
+		add.l	z80_cycles_left,d6
+		move.l	d6,a5
+		cmp.b	#1,z80_ei_return
+		bne.s	finish_ei_cancelled
+		clr.b	i_flag
+finish_ei_cancelled:
+		clr.b	z80_ei_return
+		bra.w	reti_back
+
 z80_start:	move.l	bank_address,a0				;the rom area.
 		lea	z80_optcode_00,a1			;xx optcodes.
 		move.l	gb_memory,a2				;pointer to pseudo ram.
@@ -280,6 +303,8 @@ z80_start:	move.l	bank_address,a0				;the rom area.
 		moveq.l	#0,d7
 
 		move.b	#1,h_the_flag				;h = 1!
+		clr.b	z80_ei_return
+		clr.b	z80_halt_bug
 
 		move.b	#%0,mbc1_status
 		move.l	#1,mbc5_rom_bank			;b0, b1.
@@ -297,11 +322,18 @@ z80_cpu_next_sweep:
 		IFGT	GAMEBOY_DEBUG
 		jmp	debug_output
 		ELSE
-
-		move.b	(a0)+,d7
-		lsl.w	#8,d7					;d7 = d7*256.
-		jmp	(a1,d7.l)				;jump and emulate.
+		bra.w	z80_fetch_opcode
 		ENDIF
+
+z80_fetch_opcode:
+		move.b	(a0)+,d7
+		tst.b	z80_halt_bug
+		beq.s	z80_fetch_dispatch
+		clr.b	z80_halt_bug
+		subq.l	#1,a0					;HALT bug survives a sweep boundary.
+z80_fetch_dispatch:
+		lsl.w	#8,d7
+		jmp	(a1,d7.l)
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		push - command memory supervisor
@@ -1039,16 +1071,31 @@ mbc3_latch_clock_counter_data_exit:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-reti_back:	move.l	a2,a6
+reti_back:	tst.b	i_flag
+		bne.w	no_more_irqs
+		cmp.b	#1,z80_halt
+		beq.w	no_more_irqs
+		move.l	a2,a6
 		add.l	#$ff0f,a6				;(interrupt flags).
 		move.b	(a6),d7
+		and.b	$f0(a6),d7				;IE & IF.
 		and.b	#%11111,d7
 		beq.s	no_more_irqs
 
+		clr.b	z80_halt
+		tst.b	z80_halt_bug
+		beq.s	reti_stack_pc
+		clr.b	z80_halt_bug
+		subq.l	#1,a0					;EI; HALT returns to HALT.
+reti_stack_pc:
 		move.l	a0,d6					;stack the pc.
 		sub.l	z80_pc_base,d6
 		move.b	#1,i_flag				;disable interrupts.
+		tst.b	z80_ei_return
+		beq.s	reti_choose_irq
+		move.b	#2,z80_ei_return			;RETI after EI may have already accepted an IRQ.
 
+reti_choose_irq:
 		btst	#0,d7
 		bne.s	irq_i
 		btst	#1,d7
@@ -1072,7 +1119,11 @@ irq_v:		bclr.b	#4,(a6)
 		move.l	a3,z80_pc_base				;rom base.
 
 no_more_irqs:
+		tst.b	z80_halt
+		bne.s	reti_still_halted
 		fetch_next_i
+reti_still_halted:
+		rts
 
 		cnop	0,4
 irq_i:		bclr.b	#0,(a6)

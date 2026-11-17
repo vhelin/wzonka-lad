@@ -8971,10 +8971,14 @@ vbr_blank:	btst.b	#7,$40(a6)			;lcd operation?
 		ENDIF
 
 no_vbr_blank:	move.b	$0f(a6),d7
+		and.b	$ff(a6),d7			;IE & IF.
 		addq.l	#1,h_values_indexed
 		and.b	#%11111,d7
 		beq.s	no_interrupts_0
 
+		cmp.b	#1,z80_halt			;STOP is not interrupt-woken.
+		beq.s	no_interrupts_0
+		clr.b	z80_halt			;wake HALT even with IME off.
 		tst.b	i_flag
 		bne.s	no_interrupts_0
 
@@ -9004,9 +9008,7 @@ no_interrupts_0:tst.b	z80_halt
 
 ei_loop_0:	tst.b	z80_ei_return
 		beq.s	no_ei_return_0
-		clr.b	z80_ei_return
-		move.l	z80_cycles_left,a5
-		bsr.l	reti_back
+		bsr.l	finish_ei
 		bra.s	ei_loop_0
 
 no_ei_return_0:
@@ -9106,10 +9108,14 @@ no_lcd_irq_emulation_1:
 		ENDIF
 
 		move.b	$0f(a6),d7
+		and.b	$ff(a6),d7			;IE & IF.
 		addq.l	#1,h_values_indexed
 		and.b	#%11111,d7
 		beq.s	no_interrupts_1
 
+		cmp.b	#1,z80_halt			;STOP is not interrupt-woken.
+		beq.s	no_interrupts_1
+		clr.b	z80_halt			;wake HALT even with IME off.
 		tst.b	i_flag
 		bne.s	no_interrupts_1
 
@@ -9139,9 +9145,7 @@ no_interrupts_1:tst.b	z80_halt
 
 ei_loop_1:	tst.b	z80_ei_return
 		beq.s	no_ei_return_1
-		clr.b	z80_ei_return
-		move.l	z80_cycles_left,a5
-		bsr.l	reti_back
+		bsr.l	finish_ei
 		bra.s	ei_loop_1
 
 no_ei_return_1:
@@ -9173,10 +9177,14 @@ no_timer_update_2:
 		or.b	d6,$41(a6)
 
 		move.b	$0f(a6),d7
+		and.b	$ff(a6),d7			;IE & IF.
 		addq.l	#1,h_values_indexed
 		and.b	#%11111,d7
 		beq.s	no_interrupts_2
 
+		cmp.b	#1,z80_halt			;STOP is not interrupt-woken.
+		beq.s	no_interrupts_2
+		clr.b	z80_halt			;wake HALT even with IME off.
 		tst.b	i_flag
 		bne.s	no_interrupts_2
 
@@ -9206,9 +9214,7 @@ no_interrupts_2:tst.b	z80_halt
 
 ei_loop_2:	tst.b	z80_ei_return
 		beq.s	no_ei_return_2
-		clr.b	z80_ei_return
-		move.l	z80_cycles_left,a5
-		bsr.l	reti_back
+		bsr.l	finish_ei
 		bra.s	ei_loop_2
 
 no_ei_return_2:
@@ -9272,10 +9278,14 @@ no_lcd_irq_emulation_3:
 		ENDIF
 
 		move.b	$0f(a6),d7
+		and.b	$ff(a6),d7			;IE & IF.
 		addq.l	#1,h_values_indexed
 		and.b	#%11111,d7
 		beq.s	no_interrupts_3
 
+		cmp.b	#1,z80_halt			;STOP is not interrupt-woken.
+		beq.s	no_interrupts_3
+		clr.b	z80_halt			;wake HALT even with IME off.
 		tst.b	i_flag
 		bne.s	no_interrupts_3
 
@@ -9305,9 +9315,7 @@ no_interrupts_3:tst.b	z80_halt
 
 ei_loop_3:	tst.b	z80_ei_return
 		beq.s	no_ei_return_3
-		clr.b	z80_ei_return
-		move.l	z80_cycles_left,a5
-		bsr.l	reti_back
+		bsr.l	finish_ei
 		bra.s	ei_loop_3
 
 no_ei_return_3:
@@ -9340,10 +9348,14 @@ no_timer_update_4:
 		or.b	d6,$41(a6)
 
 		move.b	$0f(a6),d7
+		and.b	$ff(a6),d7			;IE & IF.
 		addq.l	#1,h_values_indexed
 		and.b	#%11111,d7
 		beq.s	no_interrupts_4
 
+		cmp.b	#1,z80_halt			;STOP is not interrupt-woken.
+		beq.s	no_interrupts_4
+		clr.b	z80_halt			;wake HALT even with IME off.
 		tst.b	i_flag
 		bne.s	no_interrupts_4
 
@@ -9373,9 +9385,7 @@ no_interrupts_4:tst.b	z80_halt
 
 ei_loop_4:	tst.b	z80_ei_return
 		beq.s	no_ei_return_4
-		clr.b	z80_ei_return
-		move.l	z80_cycles_left,a5
-		bsr.l	reti_back
+		bsr.l	finish_ei
 		bra.s	ei_loop_4
 
 no_ei_return_4:
@@ -16378,7 +16388,8 @@ serial_device_status:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_cycles_left:dc.l	0
-z80_ei_return:	dc.b	0
+z80_ei_return:	dc.b	0				;1 = enable after next opcode, 2 = cancelled.
+z80_halt_bug:	dc.b	0
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

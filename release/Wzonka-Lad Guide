@@ -1041,7 +1041,407 @@
       software (ie. the programmes you and your friends have
       written). Read the documentation for further information.
 
-  v0.ab.cd
-  Too much to list in here.
+  [SOME RELEASES MIGHT BE MISSING FROM THIS SLOT]
+  
+  v0.99.12 (29-Nov-1998)
+  FULL executable now emulates the OAM RAM bug. Now the DMA transfer doesn't
+  transfer all the bits as 4bits / sprite are unused, which is the way the
+  real GB DMA works. This slows down the DMA transfer a bit, but should
+  offer a better compability. Sound data registers (for channels 1, 2, 3 and 4)
+  are now cleared when the "All Sound OFF" flag is set to 0, and writes to
+  them are cancelled until the flag is set to 1. Fixed few instruction timings.
+  Optimized CPU emulation a little. Up to 64Mbit ROM and 1Mbit RAM sizes are
+  supported. When saving battery RAM, the "/" symbol in cartridge name isn't
+  converted to "\" anymore, as it didn't work. Now it's replaced with "-", and
+  $80 is converted to " ". Fixed few hardware register emulations. GB Z80 CPU
+  core executes now 456 cycles per scanline. Fixed few hardware register
+  emulations. Enhanced interrupt emulation (big thanks to Noca$h!). TIMER IRQ
+  emulation is now four times as accurate, but this slows down the emulation.
+  At least Trax and Boxxle 2 work now. The input from the user is now checked
+  three times as often. Optimized JOYPAD, KEYBOARD, SEGA 2B, SEGA 4B, JOY 1B
+  and JOY 2B input routines. All MBC3 variants are now recognized and emulated
+  except for the MBC3+TIMER(+RAM+BATTERY) one, as I don't know about the timer
+  (bugfixed MBC3 emulation as well). MBC3's RTC feature is only emulated
+  read-wise as I don't know how the writes to the RTC registers are done.
+  MBC4 and MBC5 mappers are recognized, but only ROM+MBC5(+RAM+BATTERY) is
+  emulated (more info needed!). Added more ROM manufacturer ids! Fixed a bug
+  in the AGA SCREEN MODE which could have made Amiga sprite garbage appear on
+  screen when the GB's hardware window was out of screen and enabled (Pokemon).
+  Fixed DI+HALT emulation. Few interrupt related special cases are now
+  emulated. Changed the example picture in visual settings window in Wzonka-Lad
+  and Palette Editor main window. Now recognizes correctly GB, SGB and CGB
+  cartridges. ROM sizes of 9Mbit, 10Mbit and 12Mbit are now supported
+  (but not tested). There are two versions of Wzonka-Lad, R for registered
+  users and E for the rest. R can only be recieved by emailing me.
+
+  v0.99.11 (15-Jul-1998)
+  Mouse pointer is now busy in all Wzonka-Lad's windows when the emulation
+  is running. There are three different archives of v0.99.11, one compiled
+  for 030, one for 040 and one for 060. You can see the CPU version in the
+  documents and executables.
+
+  v0.99.10 (17-Jun-1998)
+  Frameskip takes now values from 0 to 16. Swapped "Reset" and "Info" buttons'
+  places. Wzonka-Lad doesn't go into a deadlock anymore if a madly corrupted
+  GameGenie code is used. GameGenie code patcher takes lowercase letters, too. 
+  Added an external list (game_genie/game_genie.list) where Wzonka-Lad fetches
+  the predefined GameGenie patch codes from. Added a listview item into Misc
+  preferences window for GameGenie patch handling. 
+
+  v0.99.9 (04-Jun-1998)
+  Fixed flag handling in "SWAP r" optcodes. "SWAP H" optcode in WARP and FAST
+  executables was broken. Optimized scanline loop.  Fixed interrupt emulation.
+  Now eg. Alleyway, Boxing, Cosmo Tank, Daedalian Opus, Funpack 2, Street
+  Fighter 2, Super Hunchback, Super R.C. Pro-am, Uoozu and Warioland 2 work.
+  Enhanced Divider register emulation. Optimized GB-Z80 emulation in FULL
+  executable a little. Donkey Kong Land 3's got now musics! Variable x is
+  now updated when the Gfx preferences window is opened. Fixed few instruction
+  timings, and LCD status register emulation. Added reset button. Added
+  more XPK related messages to the status line. Status line shows now the used
+  XPK packer when packing / unpacking data.
+
+  v0.99.8 (27-May-1998)
+  Even more manufacturer ids! Now all the windows have WA_AutoAdjust set to
+  TRUE. OS Screen is centered now before it's opened. Wzonka-Lad does
+  FindPort() 75% less often. Enhanced the installer script. Deadlock's
+  propability to occur now is 99% smaller if the user closes Palette Editor
+  and rapidly presses Wzonka-Lad's obtain button. Small audio code security 
+  fixes. Fixed interrupt emulation, now eg. Best of the Best, Funpack 1,
+  Slam Dunk and Super Bikkuriman work. GBS load requester loaded a file even
+  if the user pressed cancel. If ROM loading was cancelled the old ROM was
+  invalidated. Optimized scanline loop. Registered users can now enjoy the
+  2 button joystick support, and they can load and save a TMP GBS file
+  in realtime with cd32 joypad's forward and reverse buttons. Slowed the
+  opening of an AGA screen by 40ms. Bitmaps in OS Screen and Window drivers
+  can now be placed in FAST RAM with a checkbox. Fixed a bug in GB's LCD
+  status register handling (could cause the emulator to crash!!!). Optcodes
+  "ADD HL, ss" and "CCF" in FULL CPU emulation compute now correctly the H flag.
+
+  v0.99.7 (17-May-1998)
+  Fixed many GB hardware registers' values on startup. GB's internal RAM
+  contains now random values when a ROM is started. Added more manufacturer
+  ids. Fixed cartridge type $13's mapper emulation a little. Fixed LCD
+  state emulation, now eg. Bubsy 2, Donkey Kong, Kirby's Blockball, Undoukai
+  and Zork 1 work! Scanline loop got a little faster. Fixed the CPU to execute
+  70224 cycles per screendraw. Added support for SMC ROM captures. Now only
+  ROM files with supported sizes are runnable.
+
+  v0.99.6 (12-May-1998)
+  Colour loading from ROM's preference file can now be disabled with a button.
+  Added quite a many new manufacturer ids. Emulation failed if ROM banks
+  were switched when the PC was in RAM. Now sound channel three's sample data
+  is initialized when the emulation is continued. Fixed the bank switching
+  scheme to a dynamic one, not mapper restricted. Fixed one small interrupt
+  bug. Now eg. Popeye 2, Aerostar, Boy and His Blob, Jurassic Park 1 & 2 and
+  Pac in Time work once again. Wario Land 2 works a little better, but
+  freezes after a while. 
+
+  v0.99.5 (05-May-1998)
+  Information window shows if the ROM is SuperGameBoy enhanced or not.
+  Manufacturer id of SuperGameBoy ROM is now correctly decoded. Added a few
+  new manufacturer names to the id list. ROM checksum is computed and if
+  incorrect the ROM fails to run. Wzonka-Lad could fail to find the
+  favourites list when started from WB, but not anymore. Wzonka-Lad.KEY
+  can now be kept in Wzonka-Lad dir. If for some reason the auxiliary
+  window for preferences can't be opened, Wzonka-Lad doesn't go into a
+  deadlock.
+
+  v0.99.4 (04-May-1998)
+  Made the GUI a little more font sensitive. Now only GB ROM files with sensible
+  property index tables are runnable. ROM bank precalc tables are now allocated
+  dynamically so smaller games need less memory. Added support for 1MB ROM files,
+  but couldn't get mapper $13 to work (no documents). Added a very experimental
+  support for HuC1-mapper (Pocket Bomberman seems to work ok), documents about
+  HuC1 are gladly accepted! Wzonka-Lad doesn't crash anymore if you don't have
+  AHI installed and you open the sound preferences window. Fixed the old
+  problem with startup.i, so no need for scripts in launching via icons anymore!
+  Fixed the default Z80-GB flag positions when starting a ROM. Now the OS
+  screens center themselves!
+
+  v0.99.3 (12-Apr-1998)
+  Now instead of poking the hardware registers, AGA modes open a solid one
+  plane OS screen and inherit its frequency settings resulting in very
+  compatible PAL and NTSC modes. Adding master volume controller. Changed the
+  look of Sfx preferences window a little. Bugfixed volume envelope emulation.
+  A typo limited the range to eight levels, now fixed to 16. You can hear the
+  difference in many games, eg. Zelda, Castlevania 2... Sound superb!
+
+  v0.99.2 (05-Apr-1998)
+  Added two new gadgets; One to control multitasking and one to control the
+  use of a speed limitor in OS screen mode driver (for fast CPU users only!).
+  Fixed one bug in the English guide file, now Edit -> Prefs -window's
+  documentation is accessable. Added new texts to the status line and fixed
+  the old output data a little. Added support for GameGenie patch codes for
+  registered users.
+
+  v0.99.1 (01-Apr-1998)
+  Added French and Finnish guides. Lowered the registration prices
+  and added new ways of paying. ^_^ Extended favourite and recent menus
+  to hold 20 items each. Removed timed VRAM protection since many badly
+  coded demo ROMs and few games (eg. Donkey Kong Land 3) refused to
+  function properly, and so Wzonka-Lad needs now 512kb less memory and
+  is a little bit faster! Added runtime GBS saving and loading for
+  registered users via F1-F5 and F6-F10 buttons.
+
+  v0.99 (05-Feb-1998)
+  Fixed the Gameboy hardware window emulation, now eg. Ayakashi no Shiro
+  works better. Added an example iff to help editing the palette. Speeded
+  up the x/153 modes a little. Rewrote the sound routines. Enhanced channel
+  4 (noise) emulation a little. Added correct read/write protection for a few
+  registers. Unrolled and optimized the scanline loop for maximum speed.
+  Fixed a bug in controller list creator which caused the in-game controller
+  detection to fail if not all the additional libraries were found. Y Hz
+  audio mode is faster than ever! High Quality audio mode is now very
+  close to the original Gameboy, and eg. Kirby 2 and Zelda sound extremely
+  good!!!
+
+  v0.98 (23-Jan-1998)
+  Optimized CPU (especially FAST and WARP ones), interrupt and DMA emulations.
+  Fixed a few tiny GB-Z80 emulation bugs. Fixed the interrupts a lot, now eg.
+  Samurai Shodown, Space Invaders and Worms work again! Added LCD state
+  dependent RAM protection. Fixed sprite flipping bug making eg. Bubble
+  Bobble 2, Castlevania and R-Type 2 to work nicely! Optimized y Hz audio mode.
+  Cartridge information window shows now the used rom type. Final Fantasy
+  Mystic Quest works!! Loading a cartridge with previously saved preferences
+  doesn't pop up Visual settings any more.
+
+  v0.97 (23-Dec-1997)
+  If a cybergfx screen was used by default, the driver wasn't recognized
+  correctly at the startup. Added third (WARP) executable. Now only variable
+  x and the palette colours are used in ROM preferences saving.
+  Merry Christmas release! ;)
+
+  v0.96 (06-Dec-1997)
+  Added direct cybergraphics support with autodetection. Now OS screen
+  mode works with a graphics card supported by cybergraphics.library.
+  Removed the Spanish guide from the Wzonka-Lad distribution archive
+  and placed it into an archive of its own. Added a new sound emulation
+  mode. Now the AHI information string supports millions (!) of Hz's.
+  When idle, the CPU usage is only 20% of what it used to be. Made
+  Screen -> Mode -> Full and x/153 modes to use the same output routine.
+  Removed example RAM snapshots and battery RAM's, as I've heard that it's
+  illegal to spread them.
+
+  v0.95 (16-Nov-1997)
+  Fixed some amigaguide bugs, thanks to D. Domínguez for the report. Added
+  a Spanish documentation made by the very same dude! Now the screenmode
+  is updated if OS screen driver is activated and a new screenmode is
+  selected. Speeded up the OS screen driver x/153 mode a lot!
+
+  v0.94 (12-Nov-1997)
+  The .prefs path could be max 30 letters long. Corrected to 120 letters.
+  Altered menu window dimensions. Added emulator status line to the menu
+  window. Added finally AGA PAL and NTSC modes.
+
+  v0.93 (01-Nov-1997)
+  Returned iconstartup.i as it seems to work perfectly now. Fixed
+  a major compability problem!!!
+
+  v0.92 (25-Oct-1997)
+  A huge bug caused Wzonka-Lad to fail on systems with no Wzonka-Lad.KEY.
+  Made the memory allocation / deallocation routines fool proof. Now the
+  game window doesn't flash after a game has been started. A fast bug
+  fix - version.
+
+  v0.91 (24-Oct-1997)
+  Fixed Window driver palette bug, and speeded up the driver. Deleted
+  "Palette Editor Guide" as it was included in the "Wzonka-Lad Guide".
+  Optimized Window 320x?, 320x144 and 320x288 modes a lot! Battery RAM
+  file was cleared if a game with battery RAM was loaded, but not played.
+  Enlarged the game window's dimensions. Added a close gadget to the
+  preferences window. Now the preferences window doesn't pop up on
+  start up. ROM prefs file loader supports now v0.83 prefs and older.
+  Added emulation of the last interrupt - serial interrupt. Optimized
+  "Wzonka-Lad FAST" CPU emulation. Luca Longone drew a new icon for
+  the "Palette Editor". READ THE DOCS!
+
+  v0.90 (14-Oct-1997)
+  Rewrote the whole GUI! Now gadtools.library is used instead of custom
+  images. Fixed some very rare user interface bugs. GBS loader doesn't
+  give anymore those two enforcer hits when loading an unpacked data file,
+  and it behaves much better now. The hardware filter is now returned
+  to its original state after a pause if the audio is turned on. Removed
+  the iconstartup.i code as it started to give me enforcer hits out of blue.
+  The emulator can still be executed from a icon, but a script must be used
+  (done so by default). Added battery RAM (VGB, AmiGameBoy) support,
+  a different Palette Editor executable, graphics card indirect support
+  via window mode, audio quality selector and an easy path selector.
+  WIN+SCR is replaced by Window on Workbench screen driver, and it's now
+  resizeable, too! The emulator runs now on Workbench! Replaced the old
+  window scheme with a new one. Now every driver allocates its own memory,
+  unlike the old versions where all the memory required by the drivers was
+  allocated on startup, shrinking the memory requirements. Now all AGA
+  modes should have a maximum refresh value. Removed all debug capabilities.
+  READ THE DOCS!
+
+  v0.83 (10-Aug-1997)
+  Fixed few audio bugs and a one bigger interrupt bug. Fixed a tiny
+  controller emulation bug, now eg. Rolan's Curse 2 works *much* better.
+  Speeded up the audio routines once again.
+
+  v0.82 (27-Jul-1997)
+  Optimized the sound emulation routines. Fixed few small sound bugs. Fixed
+  a fatal interrupt bug causing timer interrupts to occur five times slower
+  than normal. Super Mario 1 and Mega Man 2 among the others sound much better
+  now...
+
+  v0.81 (21-Jun-1997)
+  Enhanced the sound emulation, fixed some sound and interrupt bugs. Now the
+  selected mixing frequency for sound is used and saved along with the
+  preferences. The frequency was always 4410, but now selecting something
+  bigger will enhance the sound quality very much. The games will sound
+  *much* better now!
+
+  v0.80 (08-Jun-1997)
+  Greatly improved the speed of GB's memory handling, but the emulator needs
+  now 256kB's more memory. Fixed a rare ROM bank switcher bug. The AGA
+  modes do not steal the system's VBR interrupt, now only hooking is used,
+  so better multitasking is achieved. Added a new FRAME SKIP value - ALL
+  (no graphics are displayed). Lennart updated the installer script.
+  Speeded up the DAA command emulation (in FULL executable). Fixed the .prefs
+  to .cfg converter version number. Added a .gbs to .sav and .sav to .gbs
+  file converters. Sounds (and the keyfiles) are now supported. Added a
+  special Sound Preferences window for registered users to use.
+
+  v0.64 (01-May-1997)
+  A "Happy Wappu To Everyone" release. ;) Fixed a sprite flipping bug (a bug
+  due to fast optimizing). Fixed a bug in SCREEN mode graphic emulation style
+  change, so no more trashed output.
+
+  v0.63 (27-Apr-1997)
+  Removed lowlevel.library from the archive due to copyright reasons.
+  Now the screenmode is fetched again from the preferences (I blew it up
+  in the previous version). Emulation can now also paused by pressing esc.
+  Speeded up 144/144 and 1/144 modes (WIN+SCR & SCREEN) a little. Tweaked
+  the AGA modes, too.
+
+  v0.62 (12-Apr-1997)
+  Added crippled GB Z80 emulation executable for those who want more speed.
+  Now ZELDA, SUPER MARIO 2 and FISHDUDE among others don't suffer from the
+  counter reset! Fixed one corrupted word from the sprite x flipping table,
+  so sprites should look better now. Added a new menu - 10 Favourite Games!
+  Read the docs for more info. Added colour reset button to the colour editor
+  window.
+
+  v0.61 (05-Apr-1997)
+  You can now load a rom image by supplying the name in the commandline.
+  Combined and enhanced the interrupt routines from versions 0.59 and 0.60.
+  Optimized the cpu emulation.
+
+  v0.60 (02-Apr-1997)
+  Now the default icons have OS2.0 look if NewIcons system is not used.
+  Added support for 2 button Sega joypad and a normal joystick. Rewrote
+  the input routines and enhanced the OS code sections a lot. Speeded up
+  the emulation, and rewrote the interrupt part, which may affect some games.
+  Enhanced the z80 emulation code. Now FRMSKIP, RENDER and REFRESH values
+  are saved with the cartridge independent colour preferences. Wzonka-Lad
+  is now shareware.
+
+  v0.59 (22-Mar-1997)
+  A fast loader fix and bug removals executed. AGA 1/144 modes have now the
+  limit of 50fps (not tested). ;)
+
+  v0.58 (21-Mar-1997)
+  Fixed an AGA 1/144 mode sprite masking bug. Added Sega controller pad support
+  and enhanced the controller autodetection. Added a 10 Recent Cartridges menu.
+  Speeded up AGA 1/144 modes and added the missing h/w window emulation.
+  Keyboard handler is finally fully coded for every screen mode. Fixed a possible
+  font allocator bug, and the version strings (both executables and guide) plus
+  some rare gui bugs.
+
+  v0.57 (02-Mar-1997)
+  Added automatic window activation in KEYBOARD mode. Now the CARTRIDGE, PREFS
+  and GBS paths from the file requesters are saved along with the universal
+  prefs. Colour loader defaults to prefs directory. Added close gadgets to
+  the CARTRIDGE INFO, PREFERENCES, ABOUT and COLOUR EDITOR windows.
+  Changed the background pattern image. ;) Added p-key pausing to KEYBOARD
+  controller. Fixed a bug in NONE xpk library GBS saver. The colour editor now
+  accepts VGB CFG files. Added a colour prefs to VGB.CFG file converter
+  executable. The COLOUR EDITOR and PREFERENCES window gadgets are shadowed
+  when the emulator is running. Luca Longone fixed the drawer icons! (Which I
+  accidentally messed up). ;) Lennart Johannesson updated the installer script.
+  Speeded up all graphics modes a little. Now the screens use the SA_AutoScroll
+  tagitem. Moved S:WzonkaLad.prefs to ENVARC:Wzonka-Lad.prefs by request.
+  Added AGA (unfinished) screen drivers.
+
+  v0.56 (03-Feb-1997)
+  Added a new screen driver and introduced a new graphics emulation mode.
+  Added reset button to the menu bar. Added colour editor window and
+  possibility to save colours universally and cartridge independently.
+  The SCREEN screen driver now inherits the main screen's ID. The SCREEN
+  screen driver now works correctly with all modes. Joypad's pause button
+  is now utilized. Removed window's priority over the sprites, because many
+  games were suffering from invisible sprites on the window. Echo RAM
+  emulation added. Added automatic screen to front popper in SCREEN + JOYPAD
+  mode.
+
+  v0.55 (18-Jan-1997)
+  Added window position saving with preferences. Added installer script by
+  Lennart Johannesson! Thanks! Fixed screenmode requester cancel button
+  bugs. Reordered the keys once again (!). This time they work perfectly
+  on an A1200 (10hrs of testing accomplished). The 1st Aminet release.
+
+  v0.54 (15-Jan-1997)
+  Compability boost release. Interrupt emulation and z80 bugs fixed.
+  Once again reordered the keys to avoid A1200 keyboard bug. Fixed a sprite
+  priority bug. Added a screenmode requester. Modified the GBS file format!
+
+  v0.53 (10-Jan-1997)
+  Fixed a debug window update bug. Fixed some major z80 and h/w emulation bugs.
+  "Zelda is working!" - release ;)
+
+  v0.52 (08-Jan-1997)
+  Fixed some z80 bugs. Added new icons by Luca Longone. Reordered the keys
+  and buttons to enhance the emulation ;) Fixed a GBS loader bug. Added xpk
+  cartridge and GBS packing/unpacking support. Speeded up debug and cartridge
+  info windows output. Visuals changed a bit, due to the addition of a
+  preferences window. Fixed a bug which could cause a crash on exit.
+  Added a primitive preferences saver. Added frame skipper.
+
+  v0.51 (03-Jan-1997)
+  Speeded up the z80 emulation. Added icons by Rickard Sandgren to the icons
+  directory. Switched from Asmone to PhxAss, because the bug I encountered
+  in Asmone wasn't funny. Boo! Added ram bank switching. Now the requester
+  recalls its path. The emulator can be launched from wb. Drew myself
+  a newicon. ;) Fixed some misc user interface bugs. Added ram snapshot loader
+  and saver.
+
+  v0.50 (30-Dec-1996)
+  Implemented the code for bank switching with look up table. Multibank games
+  speed up! Fixed some more z80 bugs. Now uses OpenWindowTags and
+  supports the 3d look mode, so there is no need for MultiCX anymore ;)
+  Thanks to Johan Sandgren for this fix! Fix for the new button looks goes
+  for Johan's brother, Rickard! (Though I did not do all the modifications he
+  suggested). Anyway, great support! ;)
+
+  v0.49 (28-Dec-1996)
+  Fixed a sprite palette bug (Reported by Morgan Johansson).
+  Now requires 1 MB more memory for the bank switching table, which isn't yet
+  in use. Fixed some bugs and speeded up the z80 emulation. 
+
+  v0.48 (26-Dec-1996)
+  Added emulation for sprite colours, and an amigaguide version of the documents.
+
+  v0.47 (25-Dec-1996)
+  Rewrote the gfx routines. Now faster (much faster on slower machines) and better.
+  Added emulation for sprite x and y flippings.
+
+  v0.46 (15-Dec-1996)
+  Added emulation for the gameboy h/w window.
+
+  v0.45 (11-Dec-1996)
+  Fixed some bugs and added the keyboard controller!
+
+  v0.44 (06-Nov-1996)
+  Now you can load rom images by the power of reqtools.library (assuming
+  that you have it). ;) Added some more things to the debug window and
+  made the emulator behave better.
+
+  v0.43 (30-Oct-1996)
+  Added a little debug window. Modified the z80 emulation. Now faster and
+  safer. Made the other windows nicer ;) Found irritating bugs... ;(
+
+  v0.42 (20-Oct-1996)
+  The first public release.
 
 @endnode

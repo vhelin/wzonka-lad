@@ -110,213 +110,35 @@ daa_execute_nor:compute_h
 ;		d6	= h ($10/0).
 ;---------------------------------------------------------------------------------------
 
-daa_flags_x:	lsr.b	#2,d6					;h00.
-		move.b	d4,d7
-		lsl.b	#1,d7
-		and.b	#%10,d7
-		clr.l	h_other_I				;h = 0!
-		or.b	d7,d6					;hc0.
-		ror.w	#8,d3
-		lea	daa_jumps(pc),a6
-		or.b	d3,d6					;hcn.
-		rol.w	#8,d3
-		jmp	([a6,d6.l*4])
+daa_flags_x:	clr.l	h_other_I				;h = 0!
+		moveq.l	#0,d7
+		btst	#8,d3
+		bne.s	daa_subtract
 
-		cnop	0,16
-daa_jumps:	dc.l	daa_000
-		dc.l	daa_0n0
-		dc.l	daa_00c
-		dc.l	daa_0nc
-		dc.l	daa_h00
-		dc.l	daa_hn0
-		dc.l	daa_h0c
-		dc.l	daa_hnc
+		tst.b	d6
+		bne.s	daa_add_six
+		move.b	d3,d6
+		and.b	#$f,d6
+		cmp.b	#9,d6
+		bls.s	daa_add_carry
+daa_add_six:	moveq.l	#6,d7
+daa_add_carry:	btst	#0,d4
+		bne.s	daa_add_sixty
+		cmp.b	#$99,d3
+		bls.s	daa_add_adjust
+daa_add_sixty:	or.b	#$60,d7
+		bset	#0,d4
+daa_add_adjust:	add.b	d7,d3
+		bra.s	daa_set_z
 
-;---------------------------------------------------------------------------------------
+daa_subtract:	tst.b	d6
+		beq.s	daa_sub_carry
+		moveq.l	#6,d7
+daa_sub_carry:	btst	#0,d4
+		beq.s	daa_sub_adjust
+		or.b	#$60,d7
+daa_sub_adjust:	sub.b	d7,d3
 
-daa_hnc:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#6,d6					;h.
-		blt.s	daa_exit_000
-		cmp.b	#6,d7					;l.
-		blt.s	daa_exit_000
-
-		add.b	#$9a,d3
-		or.b	#%1,d4					;c = 1!
-
-daa_exit_000:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_000:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#9,d6					;h.
-		bgt.s	daa_000_2
-		cmp.b	#9,d7					;l.
-		bgt.s	daa_000_2
-
-;		add.b	#$00,d3
-		and.b	#%11111110,d4				;c = 0!
-
-		bra.w	daa_set_z
-
-daa_000_2:	cmp.b	#8,d6					;h.
-		bgt.s	daa_000_3
-		cmp.b	#$A,d7					;l.
-		blt.s	daa_000_3
-
-		add.b	#$06,d3
-		and.b	#%11111110,d4				;c = 0!
-
-		bra.w	daa_set_z
-
-daa_000_3:	cmp.b	#$A,d6					;h.
-		blt.s	daa_000_4
-		cmp.b	#9,d7					;l.
-		bgt.s	daa_000_4
-
-		add.b	#$60,d3
-		or.b	#%1,d4					;c = 1!
-
-		bra.w	daa_set_z
-
-daa_000_4:	cmp.b	#9,d6					;h.
-		blt.s	daa_exit_001
-		cmp.b	#$A,d7					;l.
-		blt.s	daa_exit_001
-
-		add.b	#$66,d3
-		or.b	#%1,d4					;c = 1!
-
-daa_exit_001:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_00c:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#2,d6					;h.
-		bgt.s	daa_00c_2
-		cmp.b	#9,d7					;l.
-		bgt.s	daa_00c_2
-
-		add.b	#$60,d3
-		or.b	#%1,d4					;c = 1!
-
-		bra.w	daa_set_z
-
-daa_00c_2:	cmp.b	#2,d6					;h.
-		bgt.s	daa_exit_002
-		cmp.b	#$A,d7					;l.
-		blt.s	daa_exit_002
-
-		add.b	#$66,d3
-		or.b	#%1,d4					;c = 1!
-
-daa_exit_002:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_0n0:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#9,d6					;h.
-		bgt.s	daa_exit_003
-		cmp.b	#9,d7					;l.
-		bgt.s	daa_exit_003
-
-;		add.b	#$00,d3
-		and.b	#%11111110,d4				;c = 0!
-
-daa_exit_003:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_0nc:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#7,d6					;h.
-		blt.s	daa_exit_004
-		cmp.b	#9,d7					;l.
-		bgt.s	daa_exit_004
-
-		add.b	#$a0,d3
-		or.b	#%1,d4					;c = 1!
-
-daa_exit_004:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_h00:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#9,d6					;h.
-		bgt.s	daa_h00_2
-		cmp.b	#3,d7					;l.
-		bgt.s	daa_h00_2
-
-		add.b	#$06,d3
-		and.b	#%11111110,d4				;c = 0!
-
-		bra.w	daa_set_z
-
-daa_h00_2:	cmp.b	#$A,d6					;h.
-		blt.s	daa_exit_005
-		cmp.b	#3,d7					;l.
-		bgt.s	daa_exit_005
-
-		add.b	#$66,d3
-		or.b	#%1,d4					;c = 1!
-
-daa_exit_005:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_h0c:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#3,d6					;h.
-		bgt.s	daa_exit_006
-		cmp.b	#3,d7					;l.
-		bgt.s	daa_exit_006
-
-		add.b	#$66,d3
-		or.b	#%1,d4					;c = 1!
-
-daa_exit_006:	bra.w	daa_set_z
-
-;---------------------------------------------------------------------------------------
-
-daa_hn0:	move.b	d3,d6
-		move.b	d3,d7
-		lsr.b	#4,d6					;d6 = h.B.
-		and.b	#$f,d7					;d7 = l.B.
-
-		cmp.b	#8,d6					;h.
-		bgt.s	daa_exit_007
-		cmp.b	#6,d7					;l.
-		blt.s	daa_exit_007
-
-		add.b	#$fa,d3
-		and.b	#%11111110,d4				;c = 0!
-
-daa_exit_007:
 daa_set_z:	and.b	#%11111011,d4				;z = 0.
 		tst.b	d3					;a = 0?
 		bne.s	daa_set_z_go
@@ -1251,7 +1073,7 @@ z80_optc_CB17:	lsl.b	#4,d4					;c = mc680x0's x!
 
 z80_optcode_18:	move.b	(a0)+,d7
 		ext.w	d7
-		subq.l	#2,a5
+		subq.l	#3,a5
 		adda.w	d7,a0
 
 		fetch_next_i
@@ -1538,6 +1360,7 @@ z80_optcode_20:	subq.l	#2,a5
 
 		btst	#2,d4					;z - flag set?
 		bne.s	z80_optcode_20x				;yes. it's zero.
+		subq.l	#1,a5				;branch taken.
 
 		move.b	(a0)+,d7
 		ext.w	d7
@@ -1799,6 +1622,7 @@ z80_optcode_28:	subq.l	#2,a5
 
 		btst	#2,d4					;z - flag set?
 		beq.s	z80_optcode_28x				;nope. it's non-zero.
+		subq.l	#1,a5				;branch taken.
 
 		move.b	(a0)+,d7
 		ext.w	d7
@@ -1838,7 +1662,7 @@ z80_optcode_29:	subq.l	#2,a5					;less cycles.
 		move.w	d2,d7
 		and.w	#%100000000000,d7
 		lsr.w	#8,d7
-		lsr.b	#2,d7
+		lsr.b	#3,d7
 		move.b	d7,h_the_flag				;h from bit 11.
 
 		add.w	d2,d2					;hl = hl + hl.
@@ -2073,6 +1897,7 @@ z80_optcode_30:	subq.l	#2,a5
 
 		btst	#0,d4					;c - flag set?
 		bne.s	z80_optcode_30x				;yes. no jump.
+		subq.l	#1,a5				;branch taken.
 
 		move.b	(a0)+,d7
 		ext.w	d7
@@ -2337,6 +2162,7 @@ z80_optcode_38:	subq.l	#2,a5
 
 		btst	#0,d4					;c - flag set?
 		beq.s	z80_optcode_38x				;no. no jump.
+		subq.l	#1,a5				;branch taken.
 
 		move.b	(a0)+,d7
 		ext.w	d7
@@ -2568,13 +2394,11 @@ z80_optc_CB3E:	subq.l	#4,a5
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		3F - CCF - [n = 0, h = x, c = x, z = z]
+;		3F - CCF - [n = 0, h = 0, c = x, z = z]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_3F:	subq.l	#1,a5					;less cycles.
-		move.b	d4,d7
-		and.b	#%1,d7
-		move.b	d7,h_the_flag				;h = old c.
+		clr.l	h_other_I				;h = 0!
 		bchg	#0,d4					;complement carry flag.
 
 		and.w	#$ff,d3					;n = 0!
@@ -2780,7 +2604,7 @@ aread_d2_to_d1a:move.b	(a2,d2.l),d1				;ram read.
 ;		CB46 - BIT 0, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB46:	subq.l	#4,a5
+z80_optc_CB46:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -3005,7 +2829,7 @@ bread_d2_to_d1a:move.b	(a2,d2.l),d1				;ram read.
 ;		CB4E - BIT 1, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB4E:	subq.l	#4,a5
+z80_optc_CB4E:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -3235,7 +3059,7 @@ cread_d2_to_d0a:move.b	(a2,d2.l),d0				;ram read.
 ;		CB56 - BIT 2, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB56:	subq.l	#4,a5
+z80_optc_CB56:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -3460,7 +3284,7 @@ dread_d2_to_d0a:move.b	(a2,d2.l),d0				;ram read.
 ;		CB5E - BIT 3, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB5E:	subq.l	#4,a5
+z80_optc_CB5E:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -3691,7 +3515,7 @@ read_d7_to_d2a:	move.b	(a2,d7.l),d2				;ram read.
 ;		CB66 - BIT 4, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB66:	subq.l	#4,a5
+z80_optc_CB66:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -3916,7 +3740,7 @@ read_d2_to_d2a:	move.b	(a2,d2.l),d2				;ram read.
 ;		CB6E - BIT 5, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB6E:	subq.l	#4,a5
+z80_optc_CB6E:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -4154,15 +3978,14 @@ z80_optcode_76_halt:
 
 		cnop	0,4
 z80_optcode_76_skip:
+		move.b	#1,z80_halt_bug
 		move.l	a5,d6					;test cycles left.
 		ble.s	f_xit_xit
 
 		IFGT	GAMEBOY_DEBUG
 		jmp	debug_output
 		ELSE
-		move.b	(a0),d7
-		lsl.w	#8,d7					;d0 = d0*256.
-		jmp	(a1,d7.l)				;jump and emulate.
+		jmp	z80_fetch_opcode
 		ENDIF
 
 		cnop	0,4
@@ -4174,7 +3997,7 @@ f_xit_xit:	rts
 ;		CB76 - BIT 6, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB76:	subq.l	#4,a5
+z80_optc_CB76:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -4402,7 +4225,7 @@ read_d2_to_d3a3:move.b	(a2,d2.l),d3				;ram read.
 ;		CB7E - BIT 7, (HL) - [n = 0, h = 1, c = c, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB7E:	subq.l	#4,a5
+z80_optc_CB7E:	subq.l	#3,a5
 		move.l	#$00000001,h_other_I			;h = 1! no carry!
 		and.w	#$ff,d3					;n = 0!
 
@@ -6227,6 +6050,7 @@ z80_optcode_C0:	subq.l	#2,a5
 
 		btst	#2,d4					;z - flag set?
 		bne.s	z80_cpu_loop_c0				;yes. it's zero.
+		subq.l	#3,a5				;return taken.
 
 		READW_D5_TO_D7
 		addq.w	#2,d5
@@ -6293,7 +6117,7 @@ z80_optcode_C2:	btst	#2,d4					;z - flag set?
 		bne.s	z80_optcode_C2x				;yes. it's zero.
 
 		move.w	(a0),d7
-		subq.l	#3,a5
+		subq.l	#4,a5
 		ror.w	#8,d7					;pc updated.
 		blt.s	pc_in_ram_i
 		move.l	a3,z80_pc_base				;rom base.
@@ -6328,7 +6152,7 @@ z80_optc_CBC2:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_C3:	move.w	(a0),d7
-		subq.l	#3,a5
+		subq.l	#4,a5
 		ror.w	#8,d7					;pc updated.
 		blt.s	pc_in_ram_ii
 		move.l	a3,z80_pc_base				;rom base.
@@ -6365,7 +6189,7 @@ z80_optcode_C4:	btst	#2,d4					;z - flag set?
                 bsr.l   write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
-		subq.l	#3,a5
+		subq.l	#6,a5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_vi
 		move.l	a3,z80_pc_base				;rom base.
@@ -6478,7 +6302,7 @@ z80_optcode_C7:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		move.l	a3,a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -6501,6 +6325,7 @@ z80_optcode_C8:	subq.l	#2,a5
 
 		btst	#2,d4					;z - flag set?
 		beq.s	z80_cpu_loop_c8				;nope. it's non-zero.
+		subq.l	#3,a5				;return taken.
 
 		READW_D5_TO_D7
 		addq.w	#2,d5
@@ -6534,7 +6359,7 @@ z80_optc_CBC8:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_C9:
 		READW_D5_TO_D7
-		subq.l	#2,a5					;less cycles.
+		subq.l	#4,a5					;less cycles.
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xvi
@@ -6567,7 +6392,7 @@ z80_optcode_CA:	btst	#2,d4					;z - flag set?
 		beq.s	z80_optcode_CAx				;nope. it's non-zero.
 
 		move.w	(a0),d7
-		subq.l	#3,a5
+		subq.l	#4,a5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_iii
 		move.l	a3,z80_pc_base				;rom base.
@@ -6628,7 +6453,7 @@ z80_optcode_CC:	btst	#2,d4					;z - flag set?
                 bsr.l   write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
-		subq.l	#3,a5
+		subq.l	#6,a5
 		ror.w	#8,d7					;pc updated.
 		blt.s	pc_in_ram_vii
 		move.l	a3,z80_pc_base				;rom base.
@@ -6668,7 +6493,7 @@ z80_optcode_CD:	move.l	a0,d6
                 bsr.l   write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
-		subq.l	#3,a5
+		subq.l	#6,a5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_viii
 		move.l	a3,z80_pc_base				;rom base.
@@ -6747,7 +6572,7 @@ z80_optcode_CF:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$8(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -6770,6 +6595,7 @@ z80_optcode_D0:	subq.l	#2,a5
 
 		btst	#0,d4					;c - flag set?
 		bne.s	z80_cpu_loop_d0				;yes. no jump.
+		subq.l	#3,a5				;return taken.
 
 		READW_D5_TO_D7
 		addq.w	#2,d5
@@ -6836,7 +6662,7 @@ z80_optcode_D2:	btst	#0,d4					;c - flag set?
 		bne.s	z80_optcode_D2x				;yes. no jump.
 
 		move.w	(a0),d7
-		subq.l	#3,a5
+		subq.l	#4,a5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_iv
 		move.l	a3,z80_pc_base				;rom base.
@@ -6895,7 +6721,7 @@ z80_optcode_D4:	btst	#0,d4					;c - flag set?
 		bsr.l	write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
-		subq.l	#3,a5
+		subq.l	#6,a5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_ix
 		move.l	a3,z80_pc_base				;rom base.
@@ -7009,7 +6835,7 @@ z80_optcode_D7:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$10(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -7032,6 +6858,7 @@ z80_optcode_D8:	subq.l	#2,a5
 
 		btst	#0,d4					;c - flag set?
 		beq.s	z80_cpu_loop_d8				;no. no return.
+		subq.l	#3,a5				;return taken.
 
 		READW_D5_TO_D7
 		addq.w	#2,d5
@@ -7063,7 +6890,7 @@ z80_optc_CBD8:	subq.l	#2,a5					;less cycles.
 ;		D9 - RETI
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_D9:	subq.l	#2,a5					;less cycles.
+z80_optcode_D9:	subq.l	#4,a5					;less cycles.
 		clr.b	i_flag					;enable interrupts.
 
 		READW_D5_TO_D7
@@ -7099,7 +6926,7 @@ z80_optcode_DA:	btst	#0,d4					;c - flag set?
 		beq.s	z80_optcode_DAx				;no. no jump.
 
 		move.w	(a0),d7
-		subq.l	#3,a5
+		subq.l	#4,a5
 		ror.w	#8,d7					;pc updated.
 		blt.s	pc_in_ram_v
 		move.l	a3,z80_pc_base				;rom base.
@@ -7158,7 +6985,7 @@ z80_optcode_DC:	btst	#0,d4					;c - flag set?
 		bsr.l	write_d6_stackx
 
 		move.w	(a0),d7					;00BB.
-		subq.l	#3,a5
+		subq.l	#6,a5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_x
 		move.l	a3,z80_pc_base				;rom base.
@@ -7259,7 +7086,7 @@ z80_optcode_DF:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$18(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -7489,7 +7316,7 @@ z80_optcode_E7:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$20(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -7508,13 +7335,9 @@ z80_optc_CBE7:	subq.l	#2,a5					;less cycles.
 ;		E8 - ADD SP, x - [n = 0, h = x, c = x, z = 0]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_E8:	move.b	(a0)+,d7				;no h emulation
-		ext.w	d7					;for this optcode.
-		subq.l	#4,a5
-		add.w	d7,d5
-		move.w	CCR,d4
-		and.w	#$ff,d3					;n = 0.
-		and.b	#%1,d4
+z80_optcode_E8:	subq.l	#4,a5
+		bsr.l	add_sp_offset
+		move.w	d7,d5
 
 		fetch_next_i
 		cnop	0,128
@@ -7679,7 +7502,7 @@ z80_optcode_EF:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$28(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -7782,6 +7605,10 @@ z80_optc_CBF2:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_F3:	subq.l	#1,a5					;less cycles.
 		move.b	#1,i_flag				;no interrupts.
+		tst.b	z80_ei_return
+		beq.s	z80_optcode_F3_done
+		move.b	#2,z80_ei_return			;cancel EI, retain cycle bookkeeping.
+z80_optcode_F3_done:
 
 		fetch_next_i
 		cnop	0,128
@@ -7901,7 +7728,7 @@ z80_optcode_F7:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$30(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i
@@ -7920,13 +7747,9 @@ z80_optc_CBF7:	subq.l	#2,a5					;less cycles.
 ;		F8 - LD HL, SP+x - [n = 0, h = x, c = x, z = 0]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_F8:	move.w	d5,d2					;no h emulation
-		move.b	(a0)+,d7				;for this optcode. ;(
-		ext.w	d7
-		add.w	d7,d2
-		move.w	CCR,d4
-		subq.l	#3,a5					;?
-		and.b	#%1,d4
+z80_optcode_F8:	subq.l	#3,a5
+		bsr.l	add_sp_offset
+		move.w	d7,d2
 
 		fetch_next_i
 		cnop	0,128
@@ -7993,7 +7816,8 @@ z80_optc_CBFA:	subq.l	#2,a5					;less cycles.
 z80_optcode_FB:	subq.l	#1,a5
 		tst.b	i_flag
 		beq.s	z80_optcode_FB_exit
-		clr.b	i_flag					;interrupts enabled.
+		tst.b	z80_ei_return
+		bne.s	z80_optcode_FB_exit
 
 		move.l	a5,z80_cycles_left
 		move.l	#1,a5
@@ -8095,7 +7919,7 @@ z80_optcode_FF:	move.l	a0,d6
 		bsr.l	write_d6_stackx
 
 		lea	$38(a3),a0
-		subq.l	#8,a5
+		subq.l	#4,a5
 		move.l	a3,z80_pc_base
 
 		fetch_next_i

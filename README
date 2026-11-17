@@ -29,6 +29,26 @@ v1.11.00 (2026-Nov-17):
   only when that mode changes
 * Wave samples use the whole 4-bit range, so a value of 15
   reaches full scale
+* Master-volume (NR50) writes no longer overwrite the volume with channel
+  routing (NR51), fixing music fade-out hangs
+* Interrupt dispatch masks IF with IE before choosing the highest-priority
+  request, including the EI and RETI paths
+* HALT resumes when an enabled interrupt becomes pending even with IME off,
+  without servicing that interrupt. STOP is left halted
+* EI enables interrupts after the following instruction in all CPU modes.
+  DI cancels a pending EI, and the following instruction's cycles are
+  counted. EI/HALT and EI/RETI preserve the correct interrupt state
+* The HALT bug's suppressed PC increment survives a CPU sweep boundary,
+  including debug builds
+* ADD SP,x and LD HL,SP+x set C from the unsigned low-byte addition.
+  The full core also sets H from bit 3 and clears N and Z
+* ADD HL,HL stores a literal H flag in the full core, rather than a
+  deferred flag based on stale operands
+* CCF clears H and N in the full core while preserving Z and complementing C
+* DAA handles every A/N/H/C input combination in the full core, preserves
+  N, clears H, and sets Z from the adjusted accumulator
+* Corrected cycle counts in both cores for JR, JP, CALL, RET, RETI, RST
+  and BIT n,(HL), including taken and untaken conditional paths
 
 v1.10.00 (2026-Nov-16):
 

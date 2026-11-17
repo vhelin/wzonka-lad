@@ -3,79 +3,74 @@
   Wzonka-Lad - Yet Another Gameboy Emulator for 68020+ Amigas  
 ---------------------------------------------------------------
            Written by Ville Helin in 1996-1999
+ For the latest sources: https://github.com/vhelin/wzonka-lad
 
 
-0. HISTORY
+1. BACKGROUND
 
-Read "release/Wzonka-Lad Guide" for old events. Wzonka-Lad used
-to be shareware and closed software back in the day. The new history
-began 11-Aug-2003 as Wzonka-Lad was released under GPL 2.
-
-
-1. LEGAL STUFF
-
-Wzonka-Lad is GPL 2 software. Read the LICENSE file for further
-information. You use Wzonka-Lad at your own risk. I take no
-responsibility for anything.
+This is a Gameboy emulator written completely in 68020 asm.
+This used to be shareware, but it is now (after 11-Aug-2003)
+GPL 2 software.
 
 
-2. (GPL'ed RELEASE) HISTORY
+2. LEGAL STUFF
 
-v1.10.00:
+Wzonka-Lad is GPL 2 software. Read the LICENSE file for
+further information. You use Wzonka-Lad at your own risk.
+I take no responsibility for anything.
 
-2026-11-16: * DAA sets Z from the adjusted accumulator
-            * ADD HL,BC / ADD HL,DE / ADD HL,SP set H from
-              the carry out of bit 11
-            * CCF sets H from the old carry, then complements C
-            * HALT with interrupts disabled waits. The halt bug
-              runs only when an enabled interrupt is already
-              pending. A halted CPU resumes, without servicing
-              the interrupt, when one becomes pending while
-              interrupts stay disabled. STOP is left halted
-            * The crippled core has the same HALT fix. It does
-              not emulate DAA or the H flag. Its HALT debug
-              conditional is closed, matching the full core
-            * A missing startup library or key file is reported
-              on the console before exit
-            * DMG OAM corruption is assembled only when
-              GAMEBOY_OAM_BUG is 1. It defaults to 0, so
-              inc/dec and ld (hl+/-) do not alter other
-              OAM entries
-            * ADC and SBC set Z when the result byte is 0.
-              The carry path presets Z as well as X, because
-              ADDX and SUBX leave Z unchanged on zero. The
-              crippled core has the same fix
-            * Line-by-line sprite drawing walks OAM from
-              sprite 0 and draws higher indices first, so
-              sprite 0 is in front. Every sprite on the line
-              is drawn
-            * Channel 1 sweep runs again. Its new frequency
-              is converted like a square write, and the
-              channel goes silent past 2047
-            * A wave high-byte write uses the same divider
-              as the low byte, so the note stays in tune
-            * Noise plays at the LFSR rate. Its envelope
-              arms the noise channel. A trigger with the
-              length bit set starts the note
-            * A rising envelope stops at volume 15 and
-              holds there
-            * Length counters clock at 256 Hz. Squares and
-              noise count 64 steps, the wave counts 256,
-              and the channel goes silent at zero
-            * NR52 bits 0-3 follow the running channels.
-              A trigger sets the bit when the DAC is on.
-              The bit clears when the length expires, the
-              DAC turns off, channel 1 sweep overflows,
-              or the APU powers off. Writing NR52 while
-              the APU is already on keeps those bits, so
-              a room change can silence what is playing
-            * Powering the APU off clears envelope and
-              sweep state, so the channel stays silent
-            * Sprite drawing optimizations
-            * Window mode obeys now "OS screen speed
-              limit" setting)
 
-v1.02.00:
+2. CHANGELOG
 
-2003-12-23: * Added few missing files (the routines directory)
-2003-08-11: * Initial GPL 2 release
+v1.11.00 (2026-Nov-17):
+
+* Noise uses a shift-register pattern. The normal loop is 32767
+  steps and the short metallic mode is 127. The sample changes
+  only when that mode changes
+* Wave samples use the whole 4-bit range, so a value of 15
+  reaches full scale
+
+v1.10.00 (2026-Nov-16):
+
+* DAA sets Z from the adjusted accumulator
+* ADD HL,BC / ADD HL,DE / ADD HL,SP set H from the carry out of bit 11
+* CCF sets H from the old carry, then complements C
+* HALT with interrupts disabled waits. The halt bug runs only when an
+  enabled interrupt is already pending. A halted CPU resumes, without
+  servicing the interrupt, when one becomes pending while interrupts
+  stay disabled. STOP is left halted
+* The crippled core has the same HALT fix. It does not emulate DAA or
+  the H flag. Its HALT debug conditional is closed, matching the full core
+* A missing startup library or key file is reported on the console
+  before exit
+* DMG OAM corruption is assembled only when GAMEBOY_OAM_BUG is 1. It
+  defaults to 0, so inc/dec and ld (hl+/-) do not alter other OAM entries
+* ADC and SBC set Z when the result byte is 0. The carry path presets
+  Z as well as X, because ADDX and SUBX leave Z unchanged on zero. The
+  crippled core has the same fix
+* Line-by-line sprite drawing walks OAM from sprite 0 and draws higher
+  indices first, so sprite 0 is in front. Every sprite on the line
+  is drawn
+* Channel 1 sweep runs again. Its new frequency is converted like a
+  square write, and the channel goes silent past 2047
+* A wave high-byte write uses the same divider as the low byte, so
+  the note stays in tune
+* Noise plays at the LFSR rate. Its envelope arms the noise channel.
+  A trigger with the length bit set starts the note
+* A rising envelope stops at volume 15 and holds there
+* Length counters clock at 256 Hz. Squares and noise count 64 steps,
+  the wave counts 256, and the channel goes silent at zero
+* NR52 bits 0-3 follow the running channels. A trigger sets the bit
+  when the DAC is on. The bit clears when the length expires, the
+  DAC turns off, channel 1 sweep overflows, or the APU powers off.
+  Writing NR52 while the APU is already on keeps those bits, so
+  a room change can silence what is playing
+* Powering the APU off clears envelope and sweep state, so the
+  channel stays silent
+* Sprite drawing optimizations
+* Window mode obeys now "OS screen speed limit" setting)
+
+v1.02.00 (2003-Dec-23):
+
+* Added few missing files (the routines directory)
+* Initial GPL 2 release

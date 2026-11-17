@@ -1,2 +1,2 @@
 
-Z80_MODE		=1				;-1, 0, 1 = FAST/FULL/WARP.
+Z80_MODE		=0				;-1, 0, 1 = FAST/FULL/WARP.

@@ -688,6 +688,13 @@ sound_IV_3:	tst.b	sound_IV_onf_master
 
 		move.b	d6,d7
 
+		btst	#3,d6
+		sne	d0
+		cmp.b	old_sound_IV_width,d0
+		beq.s	sound_IV_3_pitch
+		move.b	d0,old_sound_IV_width
+		bsr.w	load_noise_sample
+sound_IV_3_pitch:
 		lea	sound_4_freq_table,a0
 		and.l	#%111,d6
 		move.l	(a0,d6.w*4),d1
@@ -706,6 +713,47 @@ sound_IV_3:	tst.b	sound_IV_onf_master
 
 		movem.l	(SP)+,d0-d3/a0-a2
 sound_IV_3_exit:rts
+
+load_noise_sample:
+		movem.l	d0-d5/a0-a5,-(SP)
+		tst.b	snd_chnlIV
+		bne.w	load_noise_pop
+		tst.l	ahi_audio_ctrl
+		beq.w	load_noise_pop
+		move.b	d0,d3
+		move.l	ahi_base,a6
+		moveq.l	#3,d0
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_UnloadSound(a6)
+
+		move.l	smpl_info_IV,a0
+		move.l	smpl_IV_mem,d0
+		move.l	#32767,d4
+		tst.b	d3
+		beq.s	load_noise_long
+		move.l	smpl_IV_short,d0
+		moveq.l	#127,d4
+load_noise_long:
+		move.l	d0,ahisi_Address(a0)
+		move.l	d4,ahisi_Length(a0)
+
+		moveq.l	#3,d0
+		move.l	#AHIST_SAMPLE,d1
+		move.l	smpl_info_IV,a0
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_LoadSound(a6)
+
+		moveq.l	#3,d0
+		moveq.l	#3,d1
+		moveq.l	#0,d2
+		move.l	d4,d3
+		moveq.l	#0,d4
+		bset	#AHISB_IMM,d4
+		move.l	ahi_audio_ctrl,a2
+		jsr	AHI_SetSound(a6)
+load_noise_pop:
+		movem.l	(SP)+,d0-d5/a0-a5
+		rts
 
 		cnop	0,4
 sound_IV_4:	tst.b	sound_IV_onf_master

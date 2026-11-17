@@ -119,6 +119,8 @@ OnGadget	equ	_LVOOnGadget
 WritePixelArray8	equ	_LVOWritePixelArray8
 WritePixelArray	equ	_LVOWritePixelArray
 DrawBevelBoxA	equ	_LVODrawBevelBoxA
+SetABPenDrMd	equ	_LVOSetABPenDrMd
+RectFill	equ	_LVORectFill
 EraseRect	equ	_LVOEraseRect
 RemoveGList	equ	_LVORemoveGList
 AHI_FreeAudioRequest	equ	_LVOAHI_FreeAudioRequest

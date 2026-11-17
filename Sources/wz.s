@@ -37,10 +37,10 @@
 		include	"ahi/ahi_lib.i"
 		include	"ahi/ahi.i"
 
-		include	"binworld:wzonka-lad/src/short_lvo.i"
-		include	"binworld:wzonka-lad/src/screens.i"
-		include	"binworld:wzonka-lad/src/iconstartup.i"
-		include	"binworld:wzonka-lad/src/z80_mode.i"
+		include	"binworld:Wzonka-Lad/Sources/short_lvo.i"
+		include	"binworld:Wzonka-Lad/Sources/screens.i"
+		include	"binworld:Wzonka-Lad/Sources/iconstartup.i"
+		include	"binworld:Wzonka-Lad/Sources/z80_mode.i"
 
 GAMEBOY_DEBUG		=0				;0 = n / 1 = y.
 GAMEBOY_SERIAL		=0				;0 = n / 1 = y.
@@ -900,14 +900,58 @@ sound_III_tbl_c:move.l	d1,d2
 		move.l	d1,d3
 		and.b	#%1111,d2			;d2 = low nibble.
 		lsr.b	#4,d3				;d3 = high nibble.
+		move.b	d2,d4
 		lsl.b	#4,d2
-		lsl.b	#4,d3				;data = data * $10.
+		or.b	d4,d2
+		move.b	d3,d4
+		lsl.b	#4,d3
+		or.b	d4,d3
 		sub.b	#128,d2
 		sub.b	#128,d3
 		move.b	d3,(a0)+			;high byte first.
 		addq.b	#1,d1
 		move.b	d2,(a0)+			;then the low byte.
 		dbra	d0,sound_III_tbl_c
+
+		move.l	smpl_IV_mem,a0
+		move.l	#$7fff,d2
+		move.w	#32767-1,d0
+noise_15:	move.w	d2,d3
+		lsr.w	#1,d3
+		eor.w	d2,d3
+		and.w	#1,d3
+		lsr.w	#1,d2
+		tst.w	d3
+		beq.s	noise_15_bit
+		or.w	#$4000,d2
+noise_15_bit:	move.w	d2,d1
+		and.w	#1,d1
+		beq.s	noise_15_high
+		move.b	#$81,(a0)+
+		bra.s	noise_15_next
+noise_15_high:	move.b	#$7f,(a0)+
+noise_15_next:	dbra	d0,noise_15
+
+		move.l	smpl_IV_short,a0
+		move.l	#$7fff,d2
+		move.w	#127-1,d0
+noise_7:	move.w	d2,d3
+		lsr.w	#1,d3
+		eor.w	d2,d3
+		and.w	#1,d3
+		lsr.w	#1,d2
+		and.w	#$ffbf,d2
+		tst.w	d3
+		beq.s	noise_7_bit
+		or.w	#$4000,d2
+		or.w	#$0040,d2
+noise_7_bit:	move.w	d2,d1
+		and.w	#1,d1
+		beq.s	noise_7_high
+		move.b	#$81,(a0)+
+		bra.s	noise_7_next
+noise_7_high:	move.b	#$7f,(a0)+
+noise_7_next:	dbra	d0,noise_7
 
 		tst.b	key_status
 		bne.w	no_zfx_off
@@ -7555,8 +7599,8 @@ init_no_3:	tst.b	snd_chnlIV
 
 		move.l	smpl_info_IV,a0
 		move.l	#AHIST_M8S,ahisi_Type(a0)	;type.
-		move.l	#smpl_IV_bn,ahisi_Address(a0)	;address.
-		move.l	#256*4,ahisi_Length(a0)		;size.
+		move.l	smpl_IV_mem,ahisi_Address(a0)	;address.
+		move.l	#32767,ahisi_Length(a0)		;size.
 
 		moveq.l	#3,d0				;sample number.
 		move.l	#AHIST_SAMPLE,d1		;type.
@@ -7567,7 +7611,7 @@ init_no_3:	tst.b	snd_chnlIV
 		moveq.l	#3,d0				;channel.
 		moveq.l	#3,d1				;sample.
 		moveq.l	#0,d2				;offset.
-		move.l	#256*4,d3			;size (full).
+		move.l	#32767,d3			;size (full).
 		moveq.l	#0,d4
 		bset	#AHISB_IMM,d4			;flags.
 		move.l	ahi_audio_ctrl,a2
@@ -10443,6 +10487,13 @@ no_s_IV_addh:	move.l	sound_IV_pan,d2
 		move.b	$22(a5),d6
 		move.b	d6,d7
 
+		btst	#3,d6
+		sne	d0
+		cmp.b	old_sound_IV_width,d0
+		beq.s	sfx_noise_pitch
+		move.b	d0,old_sound_IV_width
+		bsr.l	load_noise_sample
+sfx_noise_pitch:
 		lea	sound_4_freq_table,a0
 		and.l	#%111,d6
 		move.l	(a0,d6.w*4),d1
@@ -11811,8 +11862,8 @@ pull_z80:	lea	z80_registers,a6
 		IFEQ	GAMEBOY_USERS
 		include	"sound_routines.s"
 		ENDIF
-		include	"binworld:wzonka-lad/src/routines/list_alloc_32bit.s"
-		include	"binworld:wzonka-lad/src/routines/load!bitplanes.s"
+		include	"binworld:Wzonka-Lad/Sources/routines/list_alloc_32bit.s"
+		include	"binworld:Wzonka-Lad/Sources/routines/load!bitplanes.s"
 		include	"rle_unpacker.s"
 		include	"screen_draw_new_II.s"
 		include	"aga_screen_draw.s"
@@ -12558,7 +12609,7 @@ register_txt_11:dc.b	"and to support Amiga!",0
 
 register_txt_20:dc.b	"Send your fan software to",0
 		even
-register_txt_21:dc.b	"Ville Helin (vhelin@cc.hut.fi)",0
+register_txt_21:dc.b	"Ville Helin (ville.helin@gmail.com)",0
 		even
 register_txt_22:dc.b	"Suomenlinna c54 b14",0
 		even
@@ -12597,7 +12648,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad 1.10.00"
+menu_title:	dc.b	"Wzonka-Lad 1.11.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -12845,13 +12896,13 @@ misc_txt_2:	dc.b	"GameGenie patch code",0
 ;		menu gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_scr_txt:	dc.b	"Wzonka-Lad 1.10.00"
+menu_scr_txt:	dc.b	"Wzonka-Lad 1.11.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
 		dc.b	"e"
 		ENDIF
-		dc.b	" (68020) © Ville Helin 1996-99",0
+		dc.b	" (68020) Written by Ville Helin 1996-99",0
 		even
 
 menu_b_x	=56-16-8
@@ -13793,7 +13844,7 @@ about_text_2:	dc.b	1
 		dc.l	about_txt_2
 		dc.l	0
 
-about_txt_1:	dc.b	"WZONKA-LAD 1.10.00"
+about_txt_1:	dc.b	"WZONKA-LAD 1.11.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"R"
 		ELSE
@@ -14013,18 +14064,14 @@ smpl_bn_4:	dc.b	$80
 		dc.b	$7f
 		dc.b	$7f
 
-smpl_IV_bn:	incbin	"samples/noise.smpl"
-		incbin	"samples/noise.smpl"
-		incbin	"samples/noise.smpl"
-		incbin	"samples/noise.smpl"
-		even
-
 smpl_mem_1:	dc.l	0
 smpl_mem_2:	dc.l	0
 smpl_mem_3:	dc.l	0
 smpl_mem_4:	dc.l	0
 
 smpl_III_mem:	dc.l	0
+smpl_IV_mem:	dc.l	0
+smpl_IV_short:	dc.l	0
 
 sound_routines:	dc.l	sound_I_0
 		dc.l	sound_I_1
@@ -14265,7 +14312,7 @@ misc_win_txt:	dc.b	"Misc settings",0
 ;		the version string
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-version_data:	dc.b	"$VER: Wzonka-Lad 1.10.00"
+version_data:	dc.b	"$VER: Wzonka-Lad 1.11.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -15376,6 +15423,9 @@ old_sound_I_duty:
 		dc.b	0
 old_sound_II_duty:
 		dc.b	0
+old_sound_IV_width:
+		dc.b	0
+		dc.b	0
 
 sound_I_pan:	dc.l	0
 sound_II_pan:	dc.l	0
@@ -15869,6 +15919,8 @@ list_default_structure:
 		dc.l	smpl_mem_3,8*512,MEMF_PUBLIC
 		dc.l	smpl_mem_4,8*512,MEMF_PUBLIC
 		dc.l	smpl_III_mem,32,MEMF_PUBLIC
+		dc.l	smpl_IV_mem,32768,MEMF_PUBLIC
+		dc.l	smpl_IV_short,128,MEMF_PUBLIC
 		dc.l	sound_III_lst,256*2,MEMF_PUBLIC
 		dc.l	smpl_info_I,AHISampleInfo_SIZEOF,MEMF_PUBLIC
 		dc.l	smpl_info_II,AHISampleInfo_SIZEOF,MEMF_PUBLIC

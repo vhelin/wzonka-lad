@@ -10,37 +10,50 @@
 		include	"graphics/gfx.i"
 		include	"graphics/gfxbase.i"
 		include	"dos/dos.i"
-		include	"reqtools.i"
-		include	"intuition_lib.i"
-		include	"diskfont_lib.i"
-		include	"graphics_lib.i"
-		include	"exec_lib.i"
-		include	"dos_lib.i"
-		include	"reqtools_lib.i"
-		include	"gadtools_lib.i"
+		include	"libraries/reqtools.i"
+		include	"intuition/intuition.i"
+		include	"diskfont/diskfont.i"
+		include	"graphics/gfx.i"
+		include	"custom/exec_lib.i"
+		;include	"lowlevel.i"
+		include	"dos/dos_lib.i"
+		include	"libraries/reqtools_lib.i"
+		include	"lvo/xpkmaster_lib.i"
+		include	"xpk/xpk.i"
+		include	"custom/custom.i"
+		;include	"controlpad.i"
+		include	"libraries/gadtools.i"
+		include	"graphics/displayinfo.i"
+
+		include	"cybergraphics/cybergraphics.i"
+		include	"cybergraphics/cybergraphics_lib.i"
 
 		include	"devices/inputevent.i"
 		include	"devices/keyboard.i"
+		include	"devices/serial.i"
 		include	"libraries/gadtools.i"
 		include	"exec/io.i"
 
-		incdir	"binworld:gameboy/"
-		include	"screens.i"
-		include	"iconstartup.i"
+		include	"ahi/ahi_lib.i"
+		include	"ahi/ahi.i"
 
-PGA_Dummy		EQU	(TAG_USER+$31000)
-PGA_Freedom		EQU	(PGA_Dummy+$0001)
+		include	"binworld:Wzonka-Lad/Sources/short_lvo.i"
+		include	"binworld:Wzonka-Lad/Sources/screens.i"
+		include	"binworld:Wzonka-Lad/Sources/iconstartup.i"
 
-STRINGA_Dummy		EQU	(TAG_USER+$32000)
-STRINGA_Justification	EQU	(STRINGA_Dummy+$0010)
-STRINGA_ReplaceMode	EQU	(STRINGA_Dummy+$000D)
+;PGA_Dummy		EQU	(TAG_USER+$31000)
+;PGA_Freedom		EQU	(PGA_Dummy+$0001)
 
-GA_Dummy                EQU     (TAG_USER+$30000)
-GA_Disabled             EQU     (GA_Dummy+$000E)
-GA_TabCycle		EQU	(GA_Dummy+$0024)
+;STRINGA_Dummy		EQU	(TAG_USER+$32000)
+;STRINGA_Justification	EQU	(STRINGA_Dummy+$0010)
+;STRINGA_ReplaceMode	EQU	(STRINGA_Dummy+$000D)
 
-LORIENT_HORIZ		EQU	1
-LORIENT_VERT		EQU	2
+;GA_Dummy                EQU     (TAG_USER+$30000)
+;GA_Disabled             EQU     (GA_Dummy+$000E)
+;GA_TabCycle		EQU	(GA_Dummy+$0024)
+
+;LORIENT_HORIZ		EQU	1
+;LORIENT_VERT		EQU	2
 
 TRUE			=1
 FALSE			=0
@@ -2304,7 +2317,7 @@ exit_name:	clr.b	(a0)				;end of file name.
 ;		misc routines
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		include	"/routines/list_alloc_32bit.s"
+		include	"binworld:Wzonka-Lad/Sources/routines/list_alloc_32bit.s"
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		section	murrr,data
@@ -2475,7 +2488,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad Palette Editor 1.10 (68020) © Ville Helin 1997-99",0
+menu_title:	dc.b	"Wzonka-Lad Palette Editor 1.10 (68020) Written by Ville Helin 1997-99",0
 		even
 
 univ_gadget:	dc.l	0

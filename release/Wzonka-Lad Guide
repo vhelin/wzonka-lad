@@ -1,19 +1,18 @@
 @database "Wzonka-Lad Guide"
 @master "Wzonka-Lad Guide"
-@$VER: Wzonka-Lad Guide 1.01.00 (14.08.99)
+@$VER: Wzonka-Lad Guide 1.10.00 (16.11.2026)
 @author "Ville Helin"
 @(c) "Ville Helin 1996-1999"
 
-@node "main" "Wzonka-Lad v1.01.00 - The Game Boy Fan Software Test Platform"
+@node "main" "Wzonka-Lad v1.10.00 - The Game Boy Fan Software Test Platform"
 @toc "main"
 
           @{b}Before Starting...@{ub}
 
-          @{" ABOUT 1.01.00! READ ME!   " link "aboutw"}
+          @{" ABOUT 1.10.00! READ ME!   " link "aboutw"}
 
-          @{" Read me                   " link "read"}  @{" Requirements              " link "req"}
-          @{" Copyrights and copying    " link "copy"}  @{" Installing                " link "inst"}
-          @{" Shareware announcement    " link "share"}  @{" Debugging                 " link "debug"}
+          @{" Requirements              " link "req"}  @{" Installing                " link "inst"}
+          @{" Debugging                 " link "debug"}
 
           @{b}Windows@{ub}
 
@@ -78,20 +77,13 @@
 
 @endnode
 
-@node "aboutw" "About version 1.01.00"
+@node "aboutw" "About version 1.10.00"
 @toc "main"
 
   Wzonka-Lad emulates Game Boy (DMG), and is meant for the people who wish
-  to develope their own fan software for it. I've also written WLA GB-Z80
-  (http://www.hut.fi/~vhelin/wla.html) macro assembler, which is suitable
+  to develop their own fan software for it. I've also written WLA GB-Z80
+  (https://www.villehelin.com/wla.html) macro assembler, which is suitable
   for compiling your software to be used with Wzonka-Lad.
-
-  There has been a change in the registering policy.
-
-  This is the evaluation archive (e). v1.01.00e doesn't use a keyfile, if
-  one is present, you'll need v1.01.00r for that. Registered users need
-  to send me email and they'll recieve the latest registered version (r)
-  of Wzonka-Lad with the reply.
 
   Remember when you use Wzonka-Lad you are doing it on your own
   risk. You are fully responsible if something happens to your machine
@@ -111,7 +103,9 @@
       No window pops up at all!!@{ub}
 
   A:  You have older than 0.9x preference files in your system. Delete
-      ENVARC:Wzonka-Lad.prefs and ENV:Wzonka-Lad.prefs and it'll work.
+      ENVARC:Wzonka-Lad.prefs and ENV:Wzonka-Lad.prefs and it'll work. Or
+	  you might be missing some of the required libraries. Run the exe
+	  from a console and it should print an error message.
 
 
   @{b}Q:  Programme xxx has corrupted graphics.@{ub}
@@ -128,68 +122,7 @@
 
   @{b}Q:  I can't hear any sounds.@{ub}
 
-  A:  You'll need a keyfile to get them, so register fast! ;)
-
-
-  @{b}Q:  If I put Wzonka-Lad on my homepage, will I get a keyfile?@{ub}
-
-  A:  Certainly not. I did once give a keyfile for that reason, but
-      then I realized the world is filled with homepages, and anyone
-      willing can make one by himself.
-
-
-  @{b}Q:  If I draw MahouWB/Wunderbaum icons for Wzonka-Lad, will I get
-      a keyfile?@{ub}
-
-  A:  Get real! Luca Longone is the official Wzonka-Lad icon producer. ;)
-      But I do take free-of-charge fan art.
-
-
-  @{b}Q:  If I'll do xxx, will I get a keyfile?@{ub}
-
-  A:  Unless the xxx isn't pretty fantastic you can bet your heart out you
-      will not get it.
-
-
-  @{b}Q:  Keyfile!?@{ub}
-
-  A:  With home made software.
-
-
-  @{b}Q:  If I'll send you (the author) copyrighted ROM images, will I get
-      a keyfile?@{ub}
-
-  A:  No. And please read the documents. I will not answer to mails
-      concerning about spreading illegal ROM files. I'll just redirect them
-      to BSA for further actions. But I'll do my best to see that your
-      mailbox is filled with spam'n'bull in the next 24 hours.
-
-
-  @{b}Q:  Can I register with Kronas/Deutch Marks/Nuggets/Credits/Copper coins?@{ub}
-
-  A:  Sorry, you can register Wzonka-Lad by sending me a piece of software
-      you've made yourself as a proof of devotion.
-
-
-  @{b}Q:  I'm the author of Spanish "Amiga Burrito" magazine. Can I have
-      the keyfile for testing?@{ub}
-
-  A:  Dear Mr. Nobody, if your magazine doesn't exist you can forget it.
-
-
-  @{b}Q:  Why are you still supporting Amiga though you've received so
-      many letters from cheaters and idiots?@{ub}
-
-  A:  I'm not sure, perhaps I'm a masochist. ;) I like the Amiga OS, and
-      there are quite a many nice people, too, but sometimes I wish I
-      had never written any software, just because all the lamers and
-      lamer wannabes have killed the Amiga with their childish tricks.
-
-
-  @{b}Q:  Do you need a shrink?@{ub}
-
-  A:  No, but I bet the shirnk would want to have me. Unfortunately he wouldn't
-      get a thing out of me. ;)
+  A:  You'll need a keyfile to get them.
 
 
   @{b}Q:  What does Wzonka-Lad mean?@{ub}
@@ -202,7 +135,7 @@
 @toc "main"
 
   The keyfile must be kept in L: or PROGDIR: (the directory where Wzonka-Lad
-  executable is) volumes. You can gain a keyfile by @{"registering" link "share"}.
+  executable is) volumes.
 
   With the keyfile you can use the @{"sound preferences" link "swin"} window to select the
   preferred AHI output devices and settings. Without the keyfile the
@@ -211,9 +144,6 @@
   You'll also get a chance to use CD³² and SEGA pads, more than
   three XPK libraries, GBS loading and saving and GameGenie (tm)
   patch codes when you register!
-
-  You must not spread the keyfile as it is not a very nice thing to do.
-  Keep it to yourself!
 
 @endnode
 
@@ -248,8 +178,7 @@
 
   - FULL -->   This one offers a full GB Z80 emulation with all the
                CPU flags. Every GB-Z80 command can access RAM and ROM
-               and read/write from/to hardware registers. Even the OAM RAM
-               bug is emulated.
+               and read/write from/to hardware registers.
 
   - FAST --->  As the name indicated this one is faster, but lacks
                the emulation of H and N flags and the DAA command.
@@ -267,30 +196,6 @@
                NOTE! Due to these defects in FAST and WARP executables
                      some software may have errors with sounds, graphics
                      and/or compability.
-
-@endnode
-
-@node "share" "Shareware happyoo da!"
-@toc "main"
-
-  There has been a change in the policy; If you want to register Wzonka-Lad,
-  you'll have to send me a proof that you are writing software to Game Boy.
-  A piece of your own stuff is more than sufficient.
-
-  @{b}The Following features are only available for registered users@{ub}:
-
-  - @{b}Sounds@{ub}
-  - @{b}GameGenie patch codes@{ub}
-  - @{b}GBS saving and loading (realtime and snapshotting)@{ub}
-  - @{b}More than three XPK libraries@{ub}
-  - @{b}CD³² joypad, SEGA pads with 2 and 4 buttons and 2 button joystick
-    controllers@{ub}
-
-  If I ever see a pirated version of @{"Wzonka-Lad" link "wzonka"} or a keyfile in public
-  distribution, I will stop working.
-
-  By registering you won't only get the missing features, you'll support Amiga
-  and ensure that Wzonka-Lad is developed in the future.
 
 @endnode
 
@@ -364,37 +269,6 @@
 
 @endnode
 
-@node "copy" "Copyrights"
-@toc "main"
-
-  @{"Wzonka-Lad" link "wzonka"} @{"Palette Editor" link "pe_main"} and @{"Wzonka-Lad" link "wzonka"} the Emulator are copyrighted
-  by Ville Helin 1996-99. @{"Wzonka-Lad" link "wzonka"} Palette Editor cannot be copied
-  separately from the Wzonka-Lad emulator distribution archive. File
-  removing and data altering are prohibited.
-
-  @{"Wzonka-Lad" link "wzonka"} archive is freely distributable as long as
-
-  - @{b}no payment is taken@{ub}.
-  - @{b}the archive is complete@{ub}.
-  - @{b}no files inside the archive are altered@{ub}.
-
-  If you are doing an article or a review of @{"Wzonka-Lad" link "wzonka"} then
-  you must send me a copy of the magazine!
-
-  If @{"Wzonka-Lad" link "wzonka"} is put on a cd, then you must send me a copy of it.
-
-  If you've registered @{"Wzonka-Lad" link "wzonka"} and you've recieved a keyfile,
-  it must not leave your computer. You are not allowed to spread the
-  keyfile.
-
-  Generally, if @{"Wzonka-Lad" link "wzonka"} is involved in something I must be told. ;)
-
-  Game Boy is naturally copyrighted by Nintendo.
-
-  If any of these rules is broken I will stop developing of @{"Wzonka-Lad" link "wzonka"}.
-
-@endnode
-
 @node "inst" "Installing"
 @toc "main"
 
@@ -404,35 +278,6 @@
   Thanks to Lennart Johannesson (95lenjo@ostrabo.uddevalla.se) for
   the script. Without him we wouldn't have the option of automatic
   installation. ;) Cheers!
-
-@endnode
-
-@node "read" "Read me before anything!"
-@toc "main"
-
-  Read the documents first before sending me any mail!!!
-
-  Do not send me mail about the following things. If you do send me mail
-  with one of the listed subjects included I will not answer to your
-  mail.
-
-  @{b}I don't want to hear about@{ub}
-
-  - @{b}Requests for ROM images@{ub}.
-  - SEGA PAD's behaviour. Contact the library's @{"author" link "info"}, it's not my fault.
-
-  @{b}PS. If something seems to be wrong when first trying out a new version of
-      @{"Wzonka-Lad" link "wzonka"}, delete the old prefs file first, before sending me
-      mail. If that doesn't help, then please write me a line or two.@{ub}
-
-  But @{b}do write@{ub} about
-
-  - Emulator bugs.
-  - @{b}Brilliant@{ub} ideas (brilliant = exceptionally good).
-  - Current compability with your gfx/sfx card (with system configuration).
-  - How much you like this emulator. ^_^ Or how little. ;P
-  - Features you'd like to see in the future releases (these must, too, be
-    brilliant suggestions aswell).
 
 @endnode
 
@@ -448,7 +293,7 @@
     isn't found, but the view is optimized for wzonka font).
   - OS3.0 (OS3.0 routines @{b}are@{ub} used!).
   - AHI sound system installed, any version of this will do fine, but the newer
-    the better. Only used in the registered version of @{"Wzonka-Lad" link "wzonka"}.
+    the better.
 
 
                              Things good to have:
@@ -761,7 +606,7 @@
 @node "images" "Rom images"
 @toc "main"
 
-  Wzonka-Lad is targetted for people who wish to develope and test Game Boy
+  Wzonka-Lad is targetted for people who wish to develop and test Game Boy
   fan software on Amiga machines.
 
   Wzonka-Lad is by no means a competitor for the professional developement
@@ -769,7 +614,7 @@
   for the best hand held console there is. At least I do enjoy coding
   for Game Boy. ;)
 
-  WLA (GB-Z80 macro assembler I've written, http://www.hut.fi/~vhelin/wla.html)
+  WLA (GB-Z80 macro assembler I've written, https://www.villehelin.com/wla.html)
   comes packed with a sufficient include file to create software that works
   with Wzonka-Lad. Wzonka-Lad doesn't check the validity of the ID area in a
   ROM dump file, so you can write software without the licensee code.
@@ -851,11 +696,8 @@
 @node "author" "The author"
 @toc "main"
 
-  I'm happily living here in Finland. Age is 22 and I'm studying information
+  I'm living here in Finland. Age was 22 and I was studying information
   technology at the Helsinki University of Technology.
-
-  @{b}Now I have a summer job at Napa OY, and I'm studying at the university
-  so there's very little time for anything else at the moment. ;(@{ub}
 
   Stuff used for developement: A1200/030/50MHz (+FPU) + 16MB'S OF FAST
                                + 400MB HD + CD³² JOYPAD + "DRACULA X" -
@@ -863,8 +705,6 @@
 
   NOTE! UNCOUNTED ANIME TAPES WERE WATCHED DURING THE TIME WHICH SHOULD HAVE
         BEEN USED TO CODING/STUDYING. ;)
-
-        REGISTER WZONKA-LAD and support my anime hobby! ^_^
 
 
                              --> Free commercial <--
@@ -881,20 +721,10 @@
              They just might be original characters as they suck bad.
 
 
-  e-mail:     vhelin@cc.hut.fi
+  e-mail: ville.helin@gmail.com
 
-  snail-mail: Ville Helin
-              Suomenlinna c54 b14
-              00190 Helsinki
-              Finland
-
-  www:   http://www.hut.fi/~vhelin (The page with information about
-                                    Wzonka-Lad and other ~normal stuff).
-
-         http://www.niksula.cs.hut.fi/~tursas (This is for people capable
-                                               of reading Finnish. Take a
-                                               look at my school related
-                                               home page ;).
+  www:    https://www.villehelin.com (The page with information about
+                                      Wzonka-Lad and other ~normal stuff).
 
 @endnode
 
@@ -1134,24 +964,82 @@
 @node "history" "History"
 @toc "main"
 
-  v1.01.00 (14-Aug-99)
-  Wzonka-Lad doesn't check the ID area in a ROM dump file, so you can run
-  all the software you want with Wzonka-Lad.
+  v1.10.00 (16-Nov-2026)
+    * DAA sets Z from the adjusted accumulator
+    * ADD HL,BC / ADD HL,DE / ADD HL,SP set H from
+      the carry out of bit 11
+    * CCF sets H from the old carry, then complements C
+    * HALT with interrupts disabled waits. The halt bug
+      runs only when an enabled interrupt is already
+      pending. A halted CPU resumes, without servicing
+      the interrupt, when one becomes pending while
+      interrupts stay disabled. STOP is left halted
+    * The crippled core has the same HALT fix. It does
+      not emulate DAA or the H flag. Its HALT debug
+      conditional is closed, matching the full core
+    * A missing startup library or key file is reported
+      on the console before exit
+    * DMG OAM corruption is assembled only when
+      GAMEBOY_OAM_BUG is 1. It defaults to 0, so
+      inc/dec and ld (hl+/-) do not alter other
+      OAM entries
+    * ADC and SBC set Z when the result byte is 0.
+      The carry path presets Z as well as X, because
+      ADDX and SUBX leave Z unchanged on zero. The
+      crippled core has the same fix
+    * Line-by-line sprite drawing walks OAM from
+      sprite 0 and draws higher indices first, so
+      sprite 0 is in front. Every sprite on the line
+      is drawn
+    * Channel 1 sweep runs again. Its new frequency
+      is converted like a square write, and the
+      channel goes silent past 2047
+    * A wave high-byte write uses the same divider
+      as the low byte, so the note stays in tune
+    * Noise plays at the LFSR rate. Its envelope
+      arms the noise channel. A trigger with the
+      length bit set starts the note
+    * A rising envelope stops at volume 15 and holds there
+    * Length counters clock at 256 Hz. Squares and
+      noise count 64 steps, the wave counts 256,
+      and the channel goes silent at zero
+    * NR52 bits 0-3 follow the running channels.
+      A trigger sets the bit when the DAC is on.
+      The bit clears when the length expires, the
+      DAC turns off, channel 1 sweep overflows,
+      or the APU powers off. Writing NR52 while
+      the APU is already on keeps those bits, so
+      a room change can silence what is playing
+    * Powering the APU off clears envelope and
+      sweep state, so the channel stays silent
+    * Sprite drawing optimizations
+    * Window mode obeys now "OS screen speed
+      limit" setting)
 
-  v1.00.00 (25-May-99)
-  ROM+MBC5+RUMBLE(+SRAM+BATTERY)-mappers are now emulated, but the rumble
-  device emulation is not implemented. Optimized scanline emulation loop.
-  MBC3's clock I/O was emulated, but the clock itself wasn't. Now it is.
-  Enhanced sound channel 4 emulation. When the Game Boy screen is turned off
-  all the data is cleared instead of doing nothing in AGA mode. Palette
-  emulation came one frame too early in AGA modes. When the size of the
-  battery RAM was bigger than 8kb the active bank wasn't saved. Main menu
-  window functions can now be accessed with keyboard. Interleaved $xx and
-  $CBxx optcode routines in FULL CPU emulation, like it was done in FAST
-  earlier, resulting in a smaller executable. Enhanced Info-window data
-  display. Wzonka-Lad can now only be used in testing unlicenced software
-  (ie. the programmes you and your friends have written). Read the
-  documentation for further information.
+  v1.01.00 (14-Aug-1999)
+    * Wzonka-Lad doesn't check the ID area in a ROM dump file,
+      so you can run all the software you want with Wzonka-Lad.
+
+  v1.00.00 (25-May-1999)
+    * ROM+MBC5+RUMBLE(+SRAM+BATTERY)-mappers are now emulated,
+      but the rumble device emulation is not implemented.
+    * Optimized scanline emulation loop.
+    * MBC3's clock I/O was emulated, but the clock itself wasn't.
+      Now it is.
+    * Enhanced sound channel 4 emulation.
+    * When the Game Boy screen is turned off all the data is
+      cleared instead of doing nothing in AGA mode.
+    * Palette emulation came one frame too early in AGA modes.
+    * When the size of the battery RAM was bigger than 8kb the
+      active bank wasn't saved.
+    * Main menu window functions can now be accessed with keyboard.
+    * Interleaved $xx and $CBxx optcode routines in FULL CPU
+      emulation, like it was done in FAST earlier, resulting in
+      a smaller executable.
+    * Enhanced Info-window data display.
+    * Wzonka-Lad can now only be used in testing unlicenced
+      software (ie. the programmes you and your friends have
+      written). Read the documentation for further information.
 
   v0.ab.cd
   Too much to list in here.

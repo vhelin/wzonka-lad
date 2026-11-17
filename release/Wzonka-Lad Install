@@ -7,7 +7,7 @@
 
 ;Ask where to place the Wzonka-Lad directory
 
-(message "\nWelcome to Wzonka-Lad Installer!\n-----------------------\n\nThis program will install\n Wzonka-Lad 1.01.00\n on your Amiga\n\n (c) Ville Helin 1996-1999\nvhelin@cc.hut.fi\n\n")
+(message "\nWelcome to Wzonka-Lad Installer!\n-----------------------\n\nThis program will install\n Wzonka-Lad 1.01.00\n on your Amiga\n\n Written by Ville Helin 1996-1999\nville.helin@gmail.com\n\n")
 
 (welcome)
 
@@ -52,7 +52,7 @@
 	(confirm)
 	(files)
 	(infos)
-	(choices "Wzonka-Lad FULL" "Wzonka-Lad FAST" "Wzonka-Lad WARP" "Palette Editor")
+	(choices "Wzonka-Lad FULL" "Wzonka-Lad FAST" "Wzonka-Lad WARP" "Palette Editor" "Wzonka-Lad.KEY")
 )
 
 (set @default-dest (target))
@@ -433,4 +433,4 @@
 
 (set @default-dest (target))
 
-(message "\nEnjoy your Gameboy (tm) emulator!\n\n(c) Ville Helin 1996-1999\nvhelin@cc.hut.fi\n\n For comments about the installer mail to:\nLennart Johannesson\n95lenjo@ostrabo.uddevalla.se")
+(message "\nEnjoy your Gameboy (tm) emulator!\n\nWritten by Ville Helin 1996-1999\nville.helin@gmail.com\n\n For comments about the installer mail to:\nLennart Johannesson\n95lenjo@ostrabo.uddevalla.se")

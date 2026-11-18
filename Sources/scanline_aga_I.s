@@ -17,7 +17,7 @@ wait_Ix:	tst.b	visual_frame
 		beq.s	wait_Ix
 
 wait_donex:	cmp.l	#144,gb_scanlines		;drawing time?
-		beq.w	swap_aga_buffex			;yes!!!
+		beq.w	scan_aga_swap			;yes!!!
 		bgt.w	no_scan_aga			;no!
 
 		move.l	gb_memory,a6
@@ -30,18 +30,47 @@ wait_donex:	cmp.l	#144,gb_scanlines		;drawing time?
 
 		bsr.w	push_z80
 
+		IFNE	GFX_PROFILE
+		move.l	gb_scanlines,d0
+		cmp.l	gfx_profile_line,d0
+		seq	gfx_profile_aga_sample
+		ENDC
+		gfx_aga_line_start
 		clr.b	aga_spr_amount			;zero sprites done.
 		bsr.w	scan_aga_sprs			;do the sprites.
 		move.l	aga_sprs_inactive,a5		;a5 = signal data.
 		add.l	gb_scanlines,a5
 		move.b	aga_spr_amount,(a5)		;set the signal.
+		gfx_aga_line_end gfx_prof_aga_spr
 
+		gfx_aga_line_start
 		bsr.w	scan_aga_bg			;do the background.
+		gfx_aga_line_end gfx_prof_aga_bg
+		gfx_aga_line_start
 		bsr.w	scan_aga_win			;do the window.
+		gfx_aga_line_end gfx_prof_aga_win
+		IFNE	GFX_PROFILE
+		tst.b	gfx_profile_aga_sample
+		beq.s	scan_aga_sample_done
+		move.w	ccr,-(SP)
+		moveq.l	#0,d0
+		move.b	aga_spr_amount,d0		;reuse the dirty-row count after timing.
+		add.l	d0,gfx_profile_aga_rows
+		move.w	(SP)+,ccr
+scan_aga_sample_done:
+		clr.b	gfx_profile_aga_sample
+		ENDC
 
 		bsr.w	pull_z80
 no_scan_aga:	rts					;exit.
 
+scan_aga_swap:
+		IFNE	GFX_PROFILE
+		addq.l	#1,gfx_profile_line
+		cmp.l	#144,gfx_profile_line
+		blo.s	swap_aga_buffex
+		clr.l	gfx_profile_line
+		ENDC
 swap_aga_buffex:move.l	copper_inactive,d7
 		cmp.l	copper_I,d7
 		beq.w	copper_I_in
@@ -247,28 +276,33 @@ scan_aga_bg:	move.l	lcd_control,d0			;d0 = lcd control byte.
 		move.b	d0,d5				;d5 = plane 0.
 		move.w	d5,(a0)+			;p0 write.
 
-		moveq.l	#20/4-1,d7			;d7 = 4x blocks.
-		moveq.l	#4-1,d3
-block_read:	move.w	d4,d1
+; The first pair starts a new group; three shifts drop the old bytes.
+scan_aga_pack_tile: MACRO
+		IFNE	\1
 		lsl.l	#8,d5
-		add.b	(a1,d6.l),d1			;d1 = left tile.
 		lsl.l	#8,d2
-block_next:	lsl.w	#4,d1				;d1 = d1 * 16.
+		ENDC
+		move.w	d4,d1
+		add.b	(a1,d6.l),d1
+		lsl.w	#4,d1
 		addq.b	#1,d6
-		move.w	(a2,d1.l),d0			;d0 = left tile data.
-
-		move.b	d0,d2				;d2 = plane 1.
+		move.w	(a2,d1.l),d0
+		move.b	d0,d2					;d2 = plane 1.
 		and.b	#%11111,d6
 		lsr.w	#8,d0
-		move.b	d0,d5				;d5 = plane 0.
-		dbra	d3,block_read
+		move.b	d0,d5					;d5 = plane 0.
+		ENDM
+
+		moveq.l	#20/4-1,d7
+scan_aga_bg_group:
+		scan_aga_pack_tile 0
+		scan_aga_pack_tile 1
+		scan_aga_pack_tile 1
+		scan_aga_pack_tile 1
 
 		move.l	d5,(a0)+			;p0 write.
-		move.w	d4,d1
 		move.l	d2,(a3)+			;p1 write.
-		moveq.l	#4-1,d3
-		add.b	(a1,d6.l),d1
-		dbra	d7,block_next			;two pipe loop.
+		dbra	d7,scan_aga_bg_group
 scan_aga_bgy:	rts					;exit background drawing.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -354,38 +388,69 @@ win_aga_ok:	cmp.w	#160,d1
 
 		subq.w	#1,d3				;dbra correction.
 		add.l	d2,a1				;y inside the block.
-		moveq.l	#320/8,d0			;a speedup.
-		moveq.l	#320/8-1,d7			;         .
-		move.l	tile_adder,d2			;         .
+		move.l	tile_adder,d2
+		tst.b	d1
+		beq.s	scan_aga_aligned
 		move.w	#$00ff,d6
-		moveq.l	#0,d5
-		ror.w	d1,d6				;solid mask.
+		ror.w	d1,d6
+		move.w	d6,d4
+		lsr.w	#8,d4				;left edge keep mask.
+		move.b	(a3),d0
+		move.b	40(a3),d7
+		and.w	d4,d0
+		and.w	d4,d7
+		lsl.w	d1,d0
+		lsl.w	d1,d7
 
+; Each plane's word holds the previous and current tile bytes.
+; Shifting the pair finishes one output byte; retain the current tile for the next pair.
 scan_aga_solid:	move.w	d2,d5
 		add.b	(a0)+,d5
 		lsl.w	#4,d5
-		move.w	(a1,d5.l),d4			;d4 = data.
-
-		move.b	d4,d5				;d5 = 1.B.
-		and.w	d6,(a3)
-		clr.b	d4
-		lsl.w	#8,d5
-		lsr.w	d1,d4				;shift data.
-
-		or.w	d4,(a3)
-		add.l	d0,a3
-		and.w	d6,(a3)
+		move.w	(a1,d5.w),d4
+		move.b	d4,d7
+		lsr.w	#8,d4
+		move.b	d4,d0
+		move.w	d7,d5
 		lsr.w	d1,d5
-		or.w	d5,(a3)
-		sub.l	d7,a3
-		dbra	d3,scan_aga_solid		;next byte.
+		move.b	d5,40(a3)
+		move.w	d0,d4
+		lsr.w	d1,d4
+		move.b	d4,(a3)+
+		lsl.w	#8,d7
+		lsl.w	#8,d0
+		dbra	d3,scan_aga_solid
+
+; Merge the final spill into the right edge, preserving the rest of the background byte.
+		lsr.w	d1,d0
+		lsr.w	d1,d7
+		move.b	(a3),d4
+		and.b	d6,d4
+		or.b	d0,d4
+		move.b	d4,(a3)
+		move.b	40(a3),d5
+		and.b	d6,d5
+		or.b	d7,d5
+		move.b	d5,40(a3)
 scan_aga_wxt:	rts
+
+; With no shift, each tile replaces exactly one byte per plane.
+scan_aga_aligned:move.w	d2,d5
+		add.b	(a0)+,d5
+		lsl.w	#4,d5
+		move.w	(a1,d5.w),d4
+		move.b	d4,40(a3)
+		lsr.w	#8,d4
+		move.b	d4,(a3)+
+		dbra	d3,scan_aga_aligned
+		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		do the sprites
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-scan_aga_sprs:	move.l	aga_sprs_inactive,a0
+scan_aga_sprs:	gfx_aga_part_start
+		move.l	aga_sprs_inactive,a0
 		move.l	gb_scanlines,d7
 		add.l	d7,a0
 		tst.b	(a0)
@@ -396,47 +461,27 @@ scan_aga_sprs:	move.l	aga_sprs_inactive,a0
 		lsl.w	#6,d3
 		add.l	d3,d7				;d7 = d7 * 40 * 8.
 		add.l	d7,a1				;y position fixed.
-		moveq.l	#40,d3
 		add.l	#40*4,a1			;p0.
-		lea	(a1,d3.l),a2			; 1.
-		lea	(a2,d3.l),a3			; 2.
-		lea	(a3,d3.l),a4			; 3.
-		moveq.l	#0,d0				;clear this scanline.
-		move.l	d0,(a1)
-		move.l	d0,4(a1)
-		move.l	d0,8(a1)
-		move.l	d0,12(a1)
-		move.l	d0,16(a1)
-		move.l	d0,20(a1)
-		move.l	d0,24(a1)
-		move.l	d0,(a2)
-		move.l	d0,4(a2)
-		move.l	d0,8(a2)
-		move.l	d0,12(a2)
-		move.l	d0,16(a2)
-		move.l	d0,20(a2)
-		move.l	d0,24(a2)
-		move.l	d0,(a3)
-		move.l	d0,4(a3)
-		move.l	d0,8(a3)
-		move.l	d0,12(a3)
-		move.l	d0,16(a3)
-		move.l	d0,20(a3)
-		move.l	d0,24(a3)
-		move.l	d0,(a4)
-		move.l	d0,4(a4)
-		move.l	d0,8(a4)
-		move.l	d0,12(a4)
-		move.l	d0,16(a4)
-		move.l	d0,20(a4)
-		move.l	d0,24(a4)
+		moveq.l	#0,d0
+		moveq.l	#0,d1
+		moveq.l	#0,d2
+		moveq.l	#0,d3
+		moveq.l	#0,d4
+		moveq.l	#0,d5
+		moveq.l	#0,d6
+; Clear the same 28 bytes per plane; the last 12 bytes stay untouched.
+		movem.l	d0-d6,(a1)
+		movem.l	d0-d6,40(a1)
+		movem.l	d0-d6,80(a1)
+		movem.l	d0-d6,120(a1)
 		clr.b	(a0)				;emptied.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		first fo the sprites beyond the window
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-empty_spr_done:	move.l	lcd_control,d1			;d1 = lcd control byte.
+empty_spr_done:	gfx_aga_part_end gfx_prof_aga_clear
+		move.l	lcd_control,d1			;d1 = lcd control byte.
 		btst	#1,d1				;sprites off?
 		beq.w	aga_spr_exit			;yes.
 		btst	#2,d1				;sprite size?
@@ -455,24 +500,26 @@ sspr_aga_begin:	move.l	gb_memory,a0
 		move.l	gb_scanlines,d4
 		add.b	#16,d4			;ly + 16.
 		move.l	sprite_y,d5
+		move.w	d4,d6
+		sub.w	d5,d6			;first OAM Y that covers this line.
 		lea	spr_pick,a6
 		moveq.l	#0,d2
 		moveq.l	#40-1,d0
+		gfx_aga_part_start
 sspr_aga_pick:	move.l	(a0)+,d1			;y, x, tile, flags.
 		move.l	d1,d3
-		swap	d3
-		lsr.w	#8,d3			;d3 = y.
-		beq.s	sspr_aga_pick_x
-		cmp.w	d3,d4			;line above the sprite?
-		blo.s	sspr_aga_pick_x		;yes.
-		move.w	d3,d6
-		add.w	d5,d6
-		cmp.w	d6,d4			;line below the sprite?
-		bhi.s	sspr_aga_pick_x		;yes.
+		rol.l	#8,d3			;Y in the low byte.
+; Visible LY makes the accepted OAM Y range lie within 1..159.
+		sub.b	d6,d3
+		cmp.b	d5,d3
+		dbls	d0,sspr_aga_pick		;reject and continue if out of range.
+		bhi.s	sspr_aga_picked		;the final entry was rejected.
 		move.l	d1,(a6)+
 		addq.b	#1,d2			;hardware counts this one.
-sspr_aga_pick_x:	dbra	d0,sspr_aga_pick
-sspr_aga_picked:	tst.b	d2
+		dbra	d0,sspr_aga_pick
+sspr_aga_picked:
+		gfx_aga_part_end gfx_prof_aga_oam
+		tst.b	d2
 		beq.w	aga_spr_exit			;nothing on this line.
 		move.l	a6,a0			;draw the last pick first.
 		move.l	d2,d0
@@ -494,7 +541,8 @@ sspr_aga_picked:	tst.b	d2
 ;		d0	= number of sprites.
 ;		a0	= sprite attribute table.
 ;		a1	= sprite pattern table.
-;		a3	= sprite output planes.
+;		a2	= sprite output row.
+;		a3	= x flip table.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 sspr_aga_c8xq:
@@ -509,7 +557,6 @@ sspr_aga_c8xq:
 		ror.w	#8,d1				;d1 = gfx.B, flags.B, x.B, y.B.
 		move.b	d1,d3				;d3 = y.B.
 
-		move.l	a2,a4				;a4 = output spr (p0).
 		move.l	d4,d6
 		sub.l	d3,d6				;d6 = y inside the sprite.
 
@@ -535,10 +582,9 @@ no_aga_spr_yf:	lsl.b	#1,d6				;y = y * 2 (for data).
 		beq.s	no_aga_spr_xf			;no.
 		move.w	(a3,d7.l*2),d7			;fetch the x flipped data.
 
-no_aga_spr_xf:	moveq.l	#0,d3
-		move.b	d2,d3				;d4 = x.B.
-		lsr.b	#3,d3				;d4 = x.B / 8.
-		add.l	d3,a4				;y and x fixed.
+no_aga_spr_xf:	move.l	d2,d3
+		lsr.b	#3,d3				;d3 = x.B / 8.
+		lea	(a2,d3.l),a4			;sprite output at x.
 
 		btst	#4,d1				;which palette?
 		bne.s	aga_spr_p1
@@ -560,11 +606,16 @@ aga_spr_out:	moveq.l	#0,d3
 		or.w	d3,d6
 		eor.w	#$ffff,d6
 
+		IFNE	AGA_FULL_REGISTER_MERGE
+		aga_spr_merge_word d6,d7,d2,(a4)
+		aga_spr_merge_word d6,d3,d2,40(a4)
+		ELSE
 		and.w	d6,(a4)
 		or.w	d7,(a4)
 		add.l	#40,a4
 		and.w	d6,(a4)
 		or.w	d3,(a4)
+		ENDC
 
 		and.w	d6,(a5)
 		and.w	d6,40(a5)

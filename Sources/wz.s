@@ -42,10 +42,15 @@
 		include	"binworld:Wzonka-Lad/Sources/iconstartup.i"
 		include	"binworld:Wzonka-Lad/Sources/z80_mode.i"
 
+GFX_PROFILE=0
+		IFND	AGA_FULL_REGISTER_MERGE
+AGA_FULL_REGISTER_MERGE =1		;1 = register merge, 0 = memory baseline for profiling.
+		ENDC
 GAMEBOY_DEBUG		=0				;0 = n / 1 = y.
 GAMEBOY_SERIAL		=0				;0 = n / 1 = y.
 GAMEBOY_USERS		=0				;0 = r / 1 = e.
 GAMEBOY_OAM_BUG		=0				;0 = n / 1 = y.
+		include	"gfx_profile.i"
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 		IFEQ	GAMEBOY_USERS
@@ -106,6 +111,9 @@ gb_screen_y		=176
 register_x		=320
 register_y		=160
 window_right_bar_x	=14
+window_max_game_x	=160*9
+window_max_game_y	=144*9
+window_resize_idcmp	=IDCMP_NEWSIZE!IDCMP_CHANGEWINDOW!IDCMP_RAWKEY
 
 function_idcmp		=IDCMP_GADGETUP!IDCMP_GADGETDOWN!IDCMP_MOUSEMOVE!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
 function_flags		=WFLG_DEPTHGADGET!WFLG_DRAGBAR!WFLG_GIMMEZEROZERO!WFLG_SMART_REFRESH!WFLG_CLOSEGADGET
@@ -313,12 +321,18 @@ gb_emu:		movem.l	d2-d7/a2-a6,-(SP)
 		move.l	screen_font_y,d1
 		addq.l	#3+2,d1
 		move.l	d1,window_bars_height
+		move.w	d1,d2
+		add.w	#window_max_game_y,d2
+		move.w	d2,nw_MaxHeight(a1)
 		add.l	#144,d1
 		move.w	d1,nw_MinHeight(a1)
 		move.w	d1,wzonka_window_y
 
 		moveq.l	#8,d1
 		move.l	d1,window_bars_width
+		move.w	d1,d2
+		add.w	#window_max_game_x+window_right_bar_x,d2
+		move.w	d2,nw_MaxWidth(a1)
 		add.l	#160+window_right_bar_x,d1
 		move.w	d1,wzonka_window_x
 		move.w	d1,nw_MinWidth(a1)
@@ -1131,18 +1145,7 @@ get_message:	moveq.l	#5,d1
 		tst.l	d0				;avoid queue.
 		bne.w	menu_message
 
-		tst.b	scaling_status
-		beq.s	no_wzonka_ptr_msg
-		move.l	exec_base,a6
-		move.l	wzonka_ptr,d0
-		beq.s	no_wzonka_ptr_msg
-		move.l	d0,a0
-		move.l	wd_UserPort(a0),a0		;userport -> a0.
-		jsr	GetMsg(a6)			;get every message.
-		tst.l	d0				;avoid queue.
-		bne.w	wzonka_message
-
-no_wzonka_ptr_msg:
+		bsr.w	poll_wzonka_window
 		bsr.w	obtain_status			;turn it on/off / handle
 							;messages.
 		tst.l	function_jmp
@@ -1396,39 +1399,131 @@ menu_go_go:	add.l	d2,a0				;activated item selected.
 ;		message from the wzonka game window
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-wzonka_message:	move.l	d0,a1
-		move.l	im_Class(a1),d0
-		move.l	im_IAddress(a1),d1		;address of a gadget.
-
-		move.l	d0,-(SP)
-		jsr	ReplyMsg(a6)			;reply to it.
-		move.l	(SP)+,d0
-
-		cmp.l	#IDCMP_NEWSIZE,d0
-		bne.w	get_message
-
-wzonka_message_new_window_size:
+poll_wzonka_window:
 		tst.b	scaling_status
-		beq.w	get_message
-
-		moveq.l	#0,d2
+		beq.s	poll_wzonka_done
+		tst.l	wzonka_ptr
+		beq.s	poll_wzonka_done
 		move.l	wzonka_ptr,a5
-		move.w	wd_Width(a5),d2
-		move.l	d2,d3
-		sub.l	window_bars_width,d2
-		sub.l	#window_right_bar_x,d2
+		move.l	wd_UserPort(a5),a0
+		move.l	exec_base,a6
+		jsr	GetMsg(a6)
+		tst.l	d0
+		beq.s	poll_wzonka_done
+		move.l	d0,a1
+		move.l	im_Class(a1),d4
+		moveq.l	#0,d2
+		move.w	im_Code(a1),d2
+		move.w	im_Qualifier(a1),d3
+		movem.l	d2-d3,-(SP)
+		jsr	ReplyMsg(a6)
+		movem.l	(SP)+,d2-d3
+		cmp.l	#IDCMP_RAWKEY,d4
+		beq.s	wzonka_resize_key
+		cmp.l	#IDCMP_NEWSIZE,d4
+		beq.w	update_wzonka_window_size
+		cmp.l	#IDCMP_CHANGEWINDOW,d4
+		beq.w	update_wzonka_window_size
+poll_wzonka_done:
+		rts
 
-		movem.l	d2/d3,-(SP)
-		bsr.w	close_and_free_window
-		movem.l	(SP)+,d2/d3
+wzonka_resize_key:
+		move.l	wd_Flags(a5),d0
+		and.l	#WFLG_WINDOWACTIVE,d0
+		beq.s	poll_wzonka_done
+		cmp.w	#1,d2				;top-row 1 through 9, key-down only.
+		blo.s	poll_wzonka_done
+		cmp.w	#9,d2
+		bhi.s	poll_wzonka_done
+		move.w	d3,d0
+		and.w	#IEQUALIFIER_REPEAT!IEQUALIFIER_CONTROL!IEQUALIFIER_LALT!IEQUALIFIER_RALT!IEQUALIFIER_LCOMMAND!IEQUALIFIER_RCOMMAND,d0
+		bne.s	poll_wzonka_done
 
-		and.l	#%1111,d2
-		and.l	#$0000ffff,d3
-		sub.l	d2,d3
-		move.w	d3,wzonka_window_x
+		move.w	wd_Width(a5),d4
+		move.w	wd_Height(a5),d5
+		tst.w	window_requested_width
+		beq.s	wzonka_resize_axis
+		move.w	window_requested_width,d4
+		move.w	window_requested_height,d5
+wzonka_resize_axis:
+		and.w	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d3
+		bne.s	wzonka_resize_key_height
+		mulu.w	#160,d2
+		add.w	window_bars_width+2,d2
+		add.w	#window_right_bar_x,d2
+		move.w	d2,d4
+		bra.s	wzonka_resize_key_check
+wzonka_resize_key_height:
+		mulu.w	#144,d2
+		add.w	window_bars_height+2,d2
+		move.w	d2,d5
+wzonka_resize_key_check:
+		tst.w	window_requested_width
+		beq.s	wzonka_resize_key_current
+		cmp.w	window_requested_width,d4
+		bne.s	wzonka_resize_key_bounds
+		cmp.w	window_requested_height,d5
+		beq.w	poll_wzonka_done
+		bra.s	wzonka_resize_key_bounds
+wzonka_resize_key_current:
+		cmp.w	wd_Width(a5),d4
+		bne.s	wzonka_resize_key_bounds
+		cmp.w	wd_Height(a5),d5
+		beq.w	poll_wzonka_done
+wzonka_resize_key_bounds:
+		move.l	wd_WScreen(a5),a0
+		cmp.w	sc_Width(a0),d4
+		bhi.s	wzonka_resize_denied
+		cmp.w	sc_Height(a0),d5
+		bhi.s	wzonka_resize_denied
+		cmp.w	wd_MaxWidth(a5),d4
+		bhi.s	wzonka_resize_denied
+		cmp.w	wd_MaxHeight(a5),d5
+		bhi.s	wzonka_resize_denied
+		bsr.w	reserve_wzonka_window_size
+		tst.l	d0
+		beq.s	wzonka_resize_denied
+		move.w	d4,window_requested_width
+		move.w	d5,window_requested_height
+		bra.w	set_wzonka_window_box
 
-		bsr.w	allocate_window
-		bra.w	get_message
+wzonka_resize_denied:
+		move.l	wd_WScreen(a5),a0
+		move.l	intuition_base,a6
+		jsr	_LVODisplayBeep(a6)
+		rts
+
+;		d4/d5 = outer box size. Keep the position unless the larger box needs room.
+set_wzonka_window_box:
+		move.l	wd_WScreen(a5),a1
+		move.w	sc_Width(a1),d2
+		sub.w	d4,d2
+		move.w	sc_Height(a1),d3
+		sub.w	d5,d3
+		move.w	wd_LeftEdge(a5),d0
+		move.w	wd_TopEdge(a5),d1
+		cmp.w	d2,d0
+		ble.s	wzonka_box_left_ok
+		move.w	d2,d0
+wzonka_box_left_ok:
+		tst.w	d0
+		bpl.s	wzonka_box_top
+		moveq.l	#0,d0
+wzonka_box_top:
+		cmp.w	d3,d1
+		ble.s	wzonka_box_top_ok
+		move.w	d3,d1
+wzonka_box_top_ok:
+		tst.w	d1
+		bpl.s	wzonka_box_apply
+		moveq.l	#0,d1
+wzonka_box_apply:
+		move.l	a5,a0
+		move.w	d4,d2
+		move.w	d5,d3
+		move.l	intuition_base,a6
+		jsr	_LVOChangeWindowBox(a6)
+		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		message from the function window
@@ -2397,6 +2492,9 @@ menu_rom_run:	tst.b	cartridge_status
 menu_rom_run_no_aga:
 		lea	status_running_txt,a5
 		bsr.w	print_status_middle
+		IFNE	GFX_PROFILE
+		bsr.w	gfx_profile_open
+		ENDC
 
 		tst.b	forbid_permit_status
 		bne.s	no_forbid
@@ -2410,27 +2508,10 @@ no_forbid:
 ;		test cybergraphics screen
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		tst.l	cyber_base
-		beq.s	no_cyber_graphics_screen
-
-		tst.b	old_render
-		beq.s	no_cyber_graphics_screen
-		cmp.b	#1,old_render
-		beq.s	test_screen_id
-
-test_workbench_id:
+		cmp.b	#2,old_render			;screen mode was checked at open.
+		bne.s	no_cyber_graphics_screen
 		move.l	pub_screen_lock,a0
-		bra.s	get_cyber_id
-
-test_screen_id:	move.l	gb_screen_ptr,a0
-
-get_cyber_id:	lea	sc_ViewPort(a0),a0
-		move.l	graphics_base,a6
-		jsr	GetVPModeID(a6)
-
-		move.l	cyber_base,a6
-		jsr	IsCyberModeID(a6)
-		move.l	d0,output_cyber_status
+		bsr.w	get_screen_cyber_status
 
 no_cyber_graphics_screen:
 		move.l	cartridge,a0
@@ -2684,6 +2765,9 @@ no_new_load:	clr.b	input_status			;clear the pause flag.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 back_to_menu:	bsr.w	turn_ahi_off			;turn off the sounds.
+		IFNE	GFX_PROFILE
+		bsr.w	gfx_profile_report
+		ENDC
 
 		lea	status_paused_txt,a5
 		bsr.w	print_status_middle
@@ -2814,11 +2898,22 @@ create_col:	lea	(a1,d1.l*4),a2			;a2 = colour values.
 ;		allocate a double buffered game screen
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-dbuf_alloc:	tst.l	cyber_base
-		bne.w	alloc_cyber_screen_data
+get_screen_cyber_status:
+		clr.l	output_cyber_status
+		tst.l	cyber_base
+		beq.s	screen_cyber_status_done
 
-		bsr.w	dbuf_dealloc			;free the old stuff.
+		lea	sc_ViewPort(a0),a0
+		move.l	graphics_base,a6
+		jsr	GetVPModeID(a6)
 
+		move.l	cyber_base,a6
+		jsr	IsCyberModeID(a6)
+		move.l	d0,output_cyber_status
+screen_cyber_status_done:
+		rts
+
+dbuf_alloc:	clr.b	gb_buffer_no
 		move.l	gb_bmap_I,a0
 		move.l	gb_bplanes_I,a1			;planes.
 		bsr.w	dbuf_init
@@ -2833,15 +2928,6 @@ dbuf_alloc:	tst.l	cyber_base
 		add.l	d0,a0				;to bitmap 2 (0, 1, 2, 3).
 		move.l	a0,bitmap_spc			;sprites.
 
-		bsr.w	center_screen
-
-		move.l	intuition_base,a6
-		sub.l	a0,a0				;no newscreen structure.
-		lea	gb_taglist,a1			;only tagitems. 
-		jsr	OpenScreenTagList(a6)
-		move.l	d0,gb_screen_ptr
-		beq.w	quit_db
-
 		move.l	graphics_base,a6
 		move.l	gb_rport_I,a1
 		jsr	InitRastPort(a6)
@@ -2852,6 +2938,9 @@ dbuf_alloc:	tst.l	cyber_base
 		move.l	gb_bmap_I,rp_BitMap(a0)
 		move.l	gb_rport_II,a0
 		move.l	gb_bmap_II,rp_BitMap(a0)
+
+		tst.l	output_cyber_status
+		bne.w	alloc_cyber_screen_data
 
 dbuf_alloc_done:moveq.l	#0,d0				;no errors.
 		rts
@@ -2932,42 +3021,9 @@ center_screen_exit:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 alloc_cyber_screen_data:
-		bsr.w	cyber_screen_dealloc
-
-		move.l	gb_bmap_I,a0
-		move.l	gb_bplanes_I,a1
-		bsr.w	dbuf_init
-
-		move.l	gb_bmap_II,a0
-		move.l	gb_bplanes_II,a1
-		bsr.w	dbuf_init
-
-		move.l	gb_bplanes_I,a0
-		move.l	a0,bitmap_bg			;background.
-		add.l	d0,a0				;to bitmap 1 (0, 1, 2, 3).
-		add.l	d0,a0				;to bitmap 2 (0, 1, 2, 3).
-		move.l	a0,bitmap_spc			;sprites.
-
-		bsr.w	center_screen
-
-		move.l	intuition_base,a6
-		sub.l	a0,a0				;no newscreen structure.
-		lea	gb_taglist,a1			;only tagitems. 
-		jsr	OpenScreenTagList(a6)
-		move.l	d0,gb_screen_ptr
-		beq.w	quit_cyber_screen_alloc
-
-		move.l	graphics_base,a6
-		move.l	gb_rport_I,a1
-		jsr	InitRastPort(a6)
-		move.l	gb_rport_II,a1
-		jsr	InitRastPort(a6)
-
-		move.l	gb_rport_I,a0
 		move.l	game_tmp_rast_port,a1
-		bsr.w	copy_rast_port
-
 		move.l	graphics_base,a6
+		jsr	InitRastPort(a6)
 		move.l	#160,d0
 		tst.b	old_refresh			;mode 144/144?
 		beq.s	no_value_fix			;yes.
@@ -2978,28 +3034,20 @@ no_value_fix:	moveq.l	#1,d1
 		sub.l	a0,a0
 		jsr	AllocBitMap(a6)
 		move.l	d0,cyber_tmp_read_bitmap
+		beq.w	quit_db
 
 		move.l	game_tmp_rast_port,a1
 		clr.l	rp_Layer(a1)
 		move.l	d0,rp_BitMap(a1)
-
-		move.l	gb_rport_I,a0
-		move.l	gb_bmap_I,rp_BitMap(a0)
-		move.l	gb_rport_II,a0
-		move.l	gb_bmap_II,rp_BitMap(a0)
-
-		moveq.l	#0,d0
-		rts
-
-quit_cyber_screen_alloc:
-		moveq.l	#1,d0
-		rts
+		bra.w	dbuf_alloc_done
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		free screen buffers and a screen
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-dbuf_dealloc:	move.l	intuition_base,d0
+dbuf_dealloc:	lea	cyber_tmp_read_bitmap,a1
+		bsr.w	free_bit_maps
+		move.l	intuition_base,d0
 		beq.s	quit_gb_scr
 		move.l	d0,a6
 		move.l	gb_screen_ptr,d0
@@ -3009,25 +3057,6 @@ dbuf_dealloc:	move.l	intuition_base,d0
 		clr.l	gb_screen_ptr
 
 quit_gb_scr:	rts
-
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		free screen buffers and a screen
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-
-cyber_screen_dealloc:
-		lea	cyber_tmp_read_bitmap,a1
-		bsr.w	free_bit_maps
-
-		move.l	intuition_base,d0
-		beq.s	quit_cyber_scr
-		move.l	d0,a6
-		move.l	gb_screen_ptr,d0
-		beq.s	quit_cyber_scr			;no screen opened.
-		move.l	d0,a0
-		jsr	CloseScreen(a6)
-		clr.l	gb_screen_ptr
-
-quit_cyber_scr:	rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		different sized input buffers for graphics data
@@ -3122,17 +3151,24 @@ init_wzonka_160:move.l	graphics_base,a6
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 allocate_window_output:
+		bsr.w	init_window_readback_table
 		move.l	wzonka_ptr,a0
 		move.l	wd_RPort(a0),a0
 		move.l	game_output_tmp_rast_port,a1
 		bsr.w	copy_rast_port
 
 		move.l	wzonka_game_x,d0
+		tst.b	scaling_status
+		beq.s	allocate_window_output_bitmap
+		move.l	#window_max_game_x,d0		;one row; width changes need no reallocation.
+allocate_window_output_bitmap:
 		move.l	wzonka_ptr,a4
 		move.l	wd_RPort(a4),a4
 		move.l	rp_BitMap(a4),a4
 		lea	game_output_tmp_map_attr,a5
 		bsr.w	alloc_bit_map_other
+		tst.l	d0
+		beq.w	quit
 
 		move.l	d0,a0
 		move.l	wzonka_game_x,d0
@@ -4374,6 +4410,17 @@ close_and_free_window_no_window:
 		bsr.w	free_bit_maps
 		lea	game_output_tmp_map_attr,a1
 		bsr.w	free_bit_maps
+		clr.l	window_scale_capacity
+		clr.l	window_requested_width		;also clears the adjacent height.
+		clr.l	wzonka_game_x
+		clr.l	wzonka_game_y
+		tst.l	game_scale_array
+		beq.s	close_and_free_window_done
+		move.l	game_scale_array,a1
+		clr.l	game_scale_array
+		move.l	exec_base,a6
+		jsr	FreeVec(a6)
+close_and_free_window_done:
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -4405,9 +4452,21 @@ allocate_gfx_driver_memory_exit:
 		moveq.l	#0,d0
 		rts
 
-allocate_screen:move.l	#MEMF_CHIP!MEMF_CLEAR,screen_chip_1+8
+allocate_screen:bsr.w	center_screen
+		move.l	intuition_base,a6
+		sub.l	a0,a0
+		lea	gb_taglist,a1
+		jsr	OpenScreenTagList(a6)
+		move.l	d0,gb_screen_ptr
+		beq.w	allocate_gfx_driver_memory_error
+		move.l	d0,a0
+		bsr.w	get_screen_cyber_status
+
+		move.l	#MEMF_CHIP!MEMF_CLEAR,screen_chip_1+8
 		move.l	#MEMF_CHIP!MEMF_CLEAR,screen_chip_2+8
 
+		tst.l	output_cyber_status		;native display DMA needs CHIP RAM.
+		beq.s	allocate_screen_in_chip
 		tst.b	fast_ram_bitmaps
 		beq.s	allocate_screen_in_chip
 
@@ -4421,10 +4480,7 @@ allocate_screen_in_chip:
 		tst.l	d0				;errors?
 		beq.w	allocate_gfx_driver_memory_error;yes! quit!
 
-		bsr.w	dbuf_alloc
-
-		moveq.l	#0,d0
-		rts
+		bra.w	dbuf_alloc
 
 allocate_window:move.l	#MEMF_CHIP!MEMF_CLEAR,window_chip_1+8
 
@@ -4460,9 +4516,10 @@ allocate_window_solid:
 		move.l	d0,wzonka_ptr
 		beq.w	allocate_gfx_driver_memory_error
 
-		bsr.b	compute_wzonka_window_values
+		move.l	d0,a5
+		bsr.w	update_wzonka_window_size
 		tst.l	d0
-		beq.w	allocate_window
+		beq.s	allocate_gfx_driver_memory_error
 
 		tst.b	old_refresh			;mode 144/144?
 		beq.s	change_160x144			;yes.		
@@ -4481,78 +4538,134 @@ allocate_gfx_driver_memory_error:
 ;		compute wzonka window values
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-compute_wzonka_window_values:
-		move.l	#wd_Width,d1
-		move.l	window_bars_width,d2
-		tst.b	scaling_status
-		beq.s	compute_wzonka_window_values_no_x_fix
-		add.l	#window_right_bar_x,d2
-compute_wzonka_window_values_no_x_fix:
-		lea	wzonka_window_title_x,a0
-		lea	wzonka_game_x,a6
-		clr.b	d7
-		bsr.w	reformat_wzonka_window_values
-		tst.l	d1
-		bne.s	compute_wzonka_window_values_no_recompute
-
-		movem.l	d0/d3,-(SP)
-		bsr.w	close_and_free_window
-		movem.l	(SP)+,d0/d3
-
-		and.l	#%1111,d0
-		and.l	#$0000ffff,d3
-		sub.l	d0,d3
-		move.w	d3,wzonka_window_x
-
-		moveq.l	#0,d0
-		rts
-
-compute_wzonka_window_values_no_recompute:
-		move.l	#wd_Height,d1
-		move.l	window_bars_height,d2
-		lea	wzonka_window_title_y,a0
-		lea	wzonka_game_y,a6
-		move.b	#1,d7
-		bsr.b	reformat_wzonka_window_values
-
-		move.l	wzonka_ptr,d0
-		beq.s	compute_wzonka_window_values_exit
+update_wzonka_window_size:
+		move.w	wd_Width(a5),d4
+		move.w	wd_Height(a5),d5
+		cmp.w	window_requested_width,d4
+		bne.s	wzonka_size_reserve
+		cmp.w	window_requested_height,d5
+		bne.s	wzonka_size_reserve
+		clr.l	window_requested_width
+wzonka_size_reserve:
+		bsr.w	reserve_wzonka_window_size
+		tst.l	d0
+		beq.w	wzonka_size_failed
+		cmp.l	wzonka_game_x,d2
+		bne.s	wzonka_size_commit
+		cmp.l	wzonka_game_y,d3
+		beq.s	wzonka_size_snap
+wzonka_size_commit:
+		move.l	d2,wzonka_game_x
+		move.l	d3,wzonka_game_y
+		move.l	game_output_tmp_map_attr,d0
+		beq.s	wzonka_size_title
 		move.l	d0,a0
+		lsr.w	#3,d2
+		move.w	d2,bm_BytesPerRow(a0)
+wzonka_size_title:
+		move.l	wzonka_game_x,d0
+		lea	wzonka_window_title_x,a0
+		bsr.w	format_wzonka_window_dimension
+		move.l	wzonka_game_y,d0
+		lea	wzonka_window_title_y,a0
+		bsr.w	format_wzonka_window_dimension
+		move.l	a5,a0
 		lea	wzonka_window_title_txt,a1
 		lea	wzonka_window_screen_txt,a2
 		move.l	intuition_base,a6
 		jsr	SetWindowTitles(a6)
-compute_wzonka_window_values_exit:
+wzonka_size_snap:
+		tst.b	scaling_status
+		beq.s	wzonka_size_done
+		tst.w	window_requested_width
+		bne.s	wzonka_size_done			;don't override a queued keyboard resize.
+		move.w	wzonka_game_x+2,d4
+		add.w	window_bars_width+2,d4
+		add.w	#window_right_bar_x,d4
+		cmp.w	wd_Width(a5),d4
+		beq.s	wzonka_size_done
+		bsr.w	set_wzonka_window_box
+wzonka_size_done:
 		moveq.l	#1,d0
 		rts
 
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		reformat a value between 0 and 999
-;		INPUT:
-;		d1	= adder.
-;		d2	= subber.
-;		d7	= 0 = size check / 1 = no size check.
-;		a0	= output.
-;		a6	= pointer to a .L where the size will be held.
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-
-reformat_wzonka_window_values:
+wzonka_size_failed:
+		clr.l	window_requested_width
+		tst.l	wzonka_game_x
+		beq.s	wzonka_size_beep
+		move.w	wzonka_game_x+2,d4
+		add.w	window_bars_width+2,d4
+		add.w	#window_right_bar_x,d4
+		move.w	wzonka_game_y+2,d5
+		add.w	window_bars_height+2,d5
+		bsr.w	set_wzonka_window_box		;restore the last drawable size.
+wzonka_size_beep:
+		bsr.w	wzonka_resize_denied
 		moveq.l	#0,d0
-		move.l	wzonka_ptr,d4
-		beq.s	reformat_wzonka_window_values_exit
-		move.l	d4,a5
-		move.w	(a5,d1.l),d0
-		move.l	d0,d3
-		sub.l	d2,d0
-		move.l	d0,(a6)
-		tst.b	d7
-		bne.s	reformat_wzonka_window_values_no_size_check
+		rts
 
+;		d4/d5 = outer box size; return inner width/height in d2/d3.
+;		Grow only when needed. A failed allocation leaves the old buffer usable.
+reserve_wzonka_window_size:
+		moveq.l	#0,d2
+		moveq.l	#0,d3
+		move.w	d4,d2
+		move.w	d5,d3
+		sub.l	window_bars_width,d2
+		sub.l	window_bars_height,d3
+		tst.b	scaling_status
+		beq.s	wzonka_size_reserved
+		sub.l	#window_right_bar_x,d2
+		and.l	#-16,d2				;WritePixelArray8 rows are 16-pixel aligned.
+		cmp.l	#160,d2
+		blo.s	wzonka_reserve_failed
+		cmp.l	#window_max_game_x,d2
+		bhi.s	wzonka_reserve_failed
+		cmp.l	#144,d3
+		blo.s	wzonka_reserve_failed
+		cmp.l	#window_max_game_y,d3
+		bhi.s	wzonka_reserve_failed
+		cmp.w	#160,d2
+		bne.s	wzonka_scale_bytes
+		cmp.w	#144,d3
+		beq.s	wzonka_size_reserved		;native size uploads the readback buffer.
+wzonka_scale_bytes:
+		move.l	d2,d0
+		mulu.w	d3,d0
+		cmp.l	window_scale_capacity,d0
+		bls.s	wzonka_size_reserved
+		move.l	d0,-(SP)
+		move.l	#MEMF_PUBLIC,d1
+		move.l	exec_base,a6
+		jsr	AllocVec(a6)
+		move.l	(SP)+,d1
+		tst.l	d0
+		beq.s	wzonka_reserve_failed
+		move.l	game_scale_array,a1
+		move.l	d0,game_scale_array
+		move.l	d1,window_scale_capacity
+		move.l	a1,d1
+		beq.s	wzonka_size_reserved
+		jsr	FreeVec(a6)
+wzonka_size_reserved:
+		moveq.l	#1,d0
+		rts
+wzonka_reserve_failed:
+		moveq.l	#0,d0
+		rts
+
+format_wzonka_window_dimension:
+		divu.w	#1000,d0
 		move.b	d0,d1
-		and.b	#%1111,d1
-		bne.s	reformat_wzonka_window_values_recompute
-
-reformat_wzonka_window_values_no_size_check:
+		beq.s	wzonka_dimension_space
+		add.b	#"0",d1
+		bra.s	wzonka_dimension_thousands
+wzonka_dimension_space:
+		moveq.l	#" ",d1
+wzonka_dimension_thousands:
+		move.b	d1,(a0)+
+		clr.w	d0
+		swap	d0
 		divu.w	#100,d0
 		add.b	#"0",d0
 		move.b	d0,(a0)+
@@ -4564,11 +4677,6 @@ reformat_wzonka_window_values_no_size_check:
 		swap	d0
 		add.b	#"0",d0
 		move.b	d0,(a0)
-reformat_wzonka_window_values_exit:
-		moveq.l	#1,d1
-		rts
-reformat_wzonka_window_values_recompute:
-		moveq.l	#0,d1
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -4602,6 +4710,8 @@ get_gfx_scaling:move.l	gfx_g_scaling,a0
 
 		bsr.w	get_wzonka_window_flags
 		bsr.w	allocate_gfx_driver_memory
+		tst.l	d0
+		bne.w	quit
 
 		bra.w	get_message
 
@@ -4722,6 +4832,7 @@ misc_jmp_table:	dc.l	misc_forbid_permit
 		dc.l	get_message
 		dc.l	misc_fast_ram_bitmaps
 		dc.l	misc_get_gg
+		dc.l	misc_window_readback
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		get a new patch code
@@ -4908,6 +5019,12 @@ misc_fast_ram_bitmaps:
 		tst.l	d0
 		bne.w	quit
 
+		bra.w	get_message
+
+misc_window_readback:
+		move.l	misc_b_readback,a0
+		bsr.w	get_checkbox
+		move.b	d0,window_direct_readback
 		bra.w	get_message
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -5504,6 +5621,7 @@ copy_gameboy_colours:
 		move.b	sfx_volume_value,(a5)+
 		move.b	colour_load_status,(a5)+
 		move.b	fast_ram_bitmaps,(a5)+
+		bsr.w	save_window_readback_pref
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		save the file
@@ -5695,6 +5813,7 @@ restore_gameboy_colours:
 		move.b	(a2)+,sfx_volume_value
 		move.b	(a2)+,colour_load_status
 		move.b	(a2)+,fast_ram_bitmaps
+		bsr.w	load_window_readback_pref
 
 		move.l	xpk_names,a0
 		moveq.l	#0,d0
@@ -5709,6 +5828,22 @@ restore_gameboy_colours:
 		bsr.b	fix_volume_tables
 
 prefs_load_error:
+		rts
+
+; A tagged extension in the unused tail keeps legacy preference offsets intact.
+save_window_readback_pref:
+		move.l	#$57445242,(a5)+		;"WDRB"
+		move.b	window_direct_readback,(a5)+
+		rts
+
+load_window_readback_pref:
+		clr.b	window_direct_readback
+		cmp.l	#$57445242,(a2)+
+		bne.s	window_readback_pref_done
+		cmp.b	#1,(a2)
+		bne.s	window_readback_pref_done
+		move.b	#1,window_direct_readback
+window_readback_pref_done:
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -5732,7 +5867,7 @@ get_wzonka_window_flags:
 		moveq.l	#0,d0
 		move.b	scaling_status,d0
 		move.l	d0,d1
-		mulu.l	#IDCMP_NEWSIZE,d0
+		mulu.l	#window_resize_idcmp,d0
 		mulu.l	#WFLG_SIZEGADGET,d1
 		or.l	#wzonka_idcmp,d0
 		move.l	d0,nw_IDCMPFlags(a0)
@@ -6072,6 +6207,9 @@ missing_key:	lea	err_key,a0
 missing_say:	bsr.w	console_error
 
 quit:
+		IFNE	GFX_PROFILE
+		bsr.w	gfx_profile_close
+		ENDC
 		IFGT	GAMEBOY_SERIAL
 
 		bsr.w	serial_deallocate
@@ -10951,6 +11089,21 @@ lcd_oam_no_vbr_filtering:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 next_frame:	bsr.w	push_z80
+		cmp.b	#2,old_render
+		bne.s	next_frame_window_done
+		tst.b	scaling_status
+		beq.s	next_frame_window_done
+		tst.b	forbid_permit_status
+		bne.s	next_frame_window_poll
+		move.l	exec_base,a6
+		jsr	Permit(a6)
+		bsr.w	poll_wzonka_window
+		move.l	exec_base,a6
+		jsr	Forbid(a6)
+		bra.s	next_frame_window_done
+next_frame_window_poll:
+		bsr.w	poll_wzonka_window
+next_frame_window_done:
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		MBC3 clock emulation
@@ -11798,9 +11951,13 @@ pull_z80:	lea	z80_registers,a6
 		include	"binworld:Wzonka-Lad/Sources/routines/load!bitplanes.s"
 		include	"rle_unpacker.s"
 		include	"screen_draw_new_II.s"
+		include	"window_readback.s"
 		include	"aga_screen_draw.s"
 		include	"scanline_draw_II.s"
 		include	"scanline_aga_I.s"
+		IFNE	GFX_PROFILE
+		include	"gfx_profile.s"
+		ENDC
 
 		include	"z80_misc.s"
 
@@ -12673,6 +12830,7 @@ misc_b_1:	dc.l	0
 misc_b_2:	dc.l	0
 misc_b_3:	dc.l	0
 misc_b_6:	dc.l	0
+misc_b_readback:dc.l	0
 misc_b_str_1:	dc.l	0
 misc_b_str_2:	dc.l	0
 misc_b_str_3:	dc.l	0
@@ -12684,6 +12842,7 @@ misc_str_2:	dc.l	0
 misc_str_3:	dc.l	0
 
 misc_g_y	=36
+misc_patch_y	=misc_g_y+13
 
 misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	PLACETEXT_RIGHT
@@ -12712,7 +12871,16 @@ misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	fast_ram_bitmaps
 		dc.l	misc_b_6
 
-		dc.w	260,58+misc_g_y
+		dc.w	100,misc_g_y+13*3
+		dc.l	PLACETEXT_RIGHT
+		dc.l	misc_b_readback_txt
+		dc.w	8
+		dc.w	5				;checkbox_kind!
+		dc.l	alter_tags_checkbox
+		dc.l	window_direct_readback
+		dc.l	misc_b_readback
+
+		dc.w	260,58+misc_patch_y
 		dc.l	PLACETEXT_IN
 		dc.l	misc_b_3_txt
 		dc.w	2
@@ -12720,7 +12888,7 @@ misc_gadgets:	dc.w	100,misc_g_y
 		dc.w	50,14
 		dc.l	misc_b_3
 
-		dc.w	misc_strings_x,59+misc_g_y
+		dc.w	misc_strings_x,59+misc_patch_y
 		dc.l	PLACETEXT_LEFT
 		dc.l	misc_b_str_1_txt
 		dc.w	3
@@ -12730,7 +12898,7 @@ misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	misc_str_1
 		dc.l	misc_b_str_1
 
-		dc.w	misc_strings_x+misc_strings_dx+24,59+misc_g_y
+		dc.w	misc_strings_x+misc_strings_dx+24,59+misc_patch_y
 		dc.l	PLACETEXT_LEFT
 		dc.l	misc_b_str_2_txt
 		dc.w	4
@@ -12740,7 +12908,7 @@ misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	misc_str_2
 		dc.l	misc_b_str_2
 
-		dc.w	misc_strings_x+misc_strings_dx*2+24*2,59+misc_g_y
+		dc.w	misc_strings_x+misc_strings_dx*2+24*2,59+misc_patch_y
 		dc.l	PLACETEXT_LEFT
 		dc.l	misc_b_str_3_txt
 		dc.w	5
@@ -12750,7 +12918,7 @@ misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	misc_str_3
 		dc.l	misc_b_str_3
 
-		dc.w	55,78+misc_g_y
+		dc.w	55,78+misc_patch_y
 		dc.l	PLACETEXT_LEFT
 		dc.l	sfx_empty
 		dc.w	7
@@ -12788,6 +12956,8 @@ misc_b_3_txt:	dc.b	"Patch",0
 		even
 misc_b_6_txt:	dc.b	"Bitmaps in FAST RAM",0
 		even
+misc_b_readback_txt:dc.b	"Direct Window readback",0
+		even
 
 misc_b_str_1_txt:
 		dc.b	" ",0
@@ -12814,7 +12984,7 @@ misc_text_2:	dc.b	2
 		dc.b	0
 		dc.b	0
 		dc.w	122
-		dc.w	misc_g_y+45
+		dc.w	misc_patch_y+45
 		dc.l	font_attr
 		dc.l	misc_txt_2
 		dc.l	0
@@ -14265,8 +14435,8 @@ gfx_bevel_list:	dc.w	20,10,334,65
 		dc.w	20,114,334,69
 		dc.w	0
 
-misc_bevel_list:dc.w	85,misc_g_y-6,205,49
-		dc.w	35,misc_g_y+53,305,78
+misc_bevel_list:dc.w	75,misc_g_y-6,255,49+13
+		dc.w	35,misc_patch_y+53,305,78
 		dc.w	0
 
 bevel_box_tags:	dc.l	GT_VisualInfo,0
@@ -14354,6 +14524,8 @@ gameboy_colours_conversion_table:
 		ds.b	16
 
 pen_conversion_table:
+		dc.l	0
+window_scale_table:
 		dc.l	0
 pen_list:	ds.b	8
 pen_storage_list:
@@ -15063,6 +15235,10 @@ wzonka_window_x:dc.w	160
 wzonka_window_y:dc.w	144
 wzonka_game_x:	dc.l	0
 wzonka_game_y:	dc.l	0
+window_requested_width:dc.w	0
+window_requested_height:dc.w	0
+window_scale_capacity:
+		dc.l	0
 
 game_array:	dc.l	0
 game_scale_array:
@@ -15092,8 +15268,8 @@ wzonka_window:	dc.w	0
 		dc.l	0
 		dc.w	160
 		dc.w	144
-		dc.w	480+24
-		dc.w	432+24
+		dc.w	window_max_game_x+8+window_right_bar_x
+		dc.w	window_max_game_y+24
 		dc.w	WBENCHSCREEN
 
 wzonka_title:	dc.b	" ",0
@@ -15102,10 +15278,10 @@ wzonka_title:	dc.b	" ",0
 wzonka_window_title_txt:
 		dc.b	"Gameboy "
 wzonka_window_title_x:
-		dc.b	"   "
+		dc.b	"    "
 		dc.b	"x"
 wzonka_window_title_y:
-		dc.b	"   ",0
+		dc.b	"    ",0
 		even
 
 wzonka_window_screen_txt:
@@ -15929,9 +16105,9 @@ window_chip_1:	dc.l	wzonka_map,gb_screen_x/8*gb_screen_y*4,MEMF_CHIP!MEMF_CLEAR
 		dc.l	game_output_tmp_rast_port,rp_SIZEOF,MEMF_PUBLIC!MEMF_CLEAR
 
 		dc.l	game_array,((((160+15)/16)*16)*(144+1)),MEMF_PUBLIC
-		dc.l	game_scale_array,(480+24)*(432+24),MEMF_PUBLIC
 
 		dc.l	pen_conversion_table,$1616*2,MEMF_PUBLIC
+		dc.l	window_scale_table,window_max_game_x,MEMF_PUBLIC	;X offsets or 1 KiB pen pairs.
 
 		dc.l	0
 
@@ -16136,6 +16312,8 @@ forbid_permit_status:
 os_screen_speed_limit:
 		dc.b	0
 fast_ram_bitmaps:
+		dc.b	0
+window_direct_readback:
 		dc.b	0
 
 obtain_status_counter:

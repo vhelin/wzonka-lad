@@ -32,9 +32,11 @@ screen_draw:	tst.b	old_render			;aga?
 
 		bsr.w	push_z80
 
+		gfx_time_start
 		bsr.w	screen_draw_bg			;do the background copy.
 		bsr.w	screen_draw_wi			;do the window copy.
 		bsr.w	screen_sprites			;do them!
+		gfx_time_end gfx_prof_planar
 		bsr.w	swap_lists_nor			;swap the sprite y lists.
 		bsr.w	screen_draw_pl			;all h/w effects are done!
 		bsr.w	update_bg_pal			;output the palette.
@@ -85,6 +87,8 @@ aga_empty_all:	move.l	d1,(a0)+
 
 swap_lists_nor:	cmp.b	#2,old_render			;window?
 		beq.s	sprs_xx_done			;yes. no buffer changes.
+		tst.l	output_cyber_status		;RTG also uses a single drawing buffer.
+		bne.s	sprs_xx_done
 
 		move.l	aga_sprs_inactive,d7
 		cmp.l	aga_sprs_cI,d7
@@ -324,15 +328,17 @@ qdo_16x8_cdata:	move.l	d2,d7
 		lsl.w	#4,d4
 		lea	(a2,d4.l),a4
 
-		moveq.l	#8-1,d4
+		moveq.l	#4-1,d4
 so_16x8_cdata:	move.w	(a4)+,d5
-		move.w	d5,d6
-		lsr.w	#8,d6
-
 		move.w	d5,(a3)
-		move.w	d6,(a0)
-		add.l	#192/8,a3
-		add.l	#192/8,a0
+		lsr.w	#8,d5
+		move.w	d5,(a0)
+		move.w	(a4)+,d5
+		move.w	d5,24(a3)
+		lsr.w	#8,d5
+		move.w	d5,24(a0)
+		lea	48(a3),a3
+		lea	48(a0),a0
 		dbra	d4,so_16x8_cdata
 
 		add.w	#32,d2
@@ -370,7 +376,7 @@ xdo_16x8_cdata:	move.l	d2,d7
 		lea	(a2,d4.l),a5
 		and.b	#$1f,d3
 
-		moveq.l	#8-1,d4
+		moveq.l	#4-1,d4
 do_16x8_cdata:	move.w	(a4)+,d5
 		move.b	d5,d6
 		lsl.w	#8,d6
@@ -381,8 +387,19 @@ do_16x8_cdata:	move.w	(a4)+,d5
 
 		move.w	d6,(a3)
 		move.w	d5,(a0)
-		add.l	#192/8,a3
-		add.l	#192/8,a0
+
+		move.w	(a4)+,d5
+		move.b	d5,d6
+		lsl.w	#8,d6
+		move.w	(a5)+,d7
+		move.b	d7,d6
+		lsr.w	#8,d7
+		move.b	d7,d5
+
+		move.w	d6,24(a3)
+		move.w	d5,24(a0)
+		lea	48(a3),a3
+		lea	48(a0),a0
 		dbra	d4,do_16x8_cdata
 
 		add.w	#32,d2
@@ -534,21 +551,32 @@ screen_sprites:	move.l	bitmap_spc,a0			;the sprite area.
 		add.l	#gb_screen_x/8*gb_screen_y,a1
 
 fast_clearing:	move.l	aga_sprs_inactive,a2
-		move.w	#gb_screen_y-1,d0
-		move.l	#gb_screen_x/8,d2
-spr_scnr_empty:	tst.b	(a2)
-		bne.s	clear_me
-		add.l	d2,a0
-		addq.l	#1,a2
-		add.l	d2,a1
-		dbra	d0,spr_scnr_empty
+		moveq.l	#gb_screen_y/4-1,d0
+		moveq.l	#0,d2
+		moveq.l	#0,d3
+		moveq.l	#0,d4
+		moveq.l	#0,d5
+		moveq.l	#0,d6
+		moveq.l	#0,d7
+; The list is aligned; skip four rows without touching either plane.
+spr_scnr_group:	tst.l	(a2)
+		bne.s	spr_scnr_marked
+		addq.l	#4,a2
+		lea	96(a0),a0
+		lea	96(a1),a1
+		dbra	d0,spr_scnr_group
 		bra.s	lines_done
-clear_me:	clr.b	(a2)+
-		moveq.l	#gb_screen_x/8/4-1,d1
-clear_us:	clr.l	(a0)+
-		clr.l	(a1)+
-		dbra	d1,clear_us
-		dbra	d0,spr_scnr_empty
+
+spr_scnr_marked:moveq.l	#4-1,d1
+spr_scnr_row:	tst.b	(a2)+
+		beq.s	spr_scnr_next
+		clr.b	-1(a2)
+		movem.l	d2-d7,(a0)
+		movem.l	d2-d7,(a1)
+spr_scnr_next:	lea	24(a0),a0
+		lea	24(a1),a1
+		dbra	d1,spr_scnr_row
+		dbra	d0,spr_scnr_group
 
 lines_done:	move.l	lcd_control,d1			;d1 = lcd control byte.
 		btst	#1,d1				;sprites off?
@@ -859,121 +887,71 @@ next_IIII:	add.l	#192/8,a4
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-spr_col_change:	moveq.l	#8-1,d4				;this many pixels.
-		move.l	#$00ff0000+16-1,d5		;d5 = mask.W, bit pointer.W.
-		move.l	#$000000ff,d6			;d6 = adder.W, mask.W.
+spr_col_change:	move.l	d7,-(SP)
+		moveq.l	#0,d4
+		move.w	d3,d4
+		moveq.l	#0,d5
+		move.b	d4,d5
+		lsr.w	#8,d4
+		move.l	d4,d6
+		and.b	d5,d6				;source colour 3.
+		eor.b	d6,d4				;source colour 1.
+		eor.b	d6,d5				;source colour 2.
 
-spr_col_do:	btst	d4,d3				;p1 bit test.
-		bne.s	spr_col_p0set			;it's 1!
-spr_col_p0clr:	btst	d5,d3				;p0 bit test.
-		bne.s	spr_col_01			;it's 1!
+;		Replicate each source mask into [zero, BG adder, p0, p1],
+;		then keep only the bytes selected by that colour's palette shade.
+		move.b	d4,d7
+		lsl.l	#8,d4
+		move.b	d7,d4
+		lsl.l	#8,d4
+		move.b	d7,d4
+		move.b	d1,d7
+		lsr.w	#2,d7
+		and.w	#3,d7
+		and.l	spr_col_shades(pc,d7.w*4),d4
 
-spr_col_00:	bset	d5,d6				;manipulate the mask.
-		swap	d2
-		move.b	d5,d2
-		swap	d5
-		bset	d2,d5
-		swap	d5
-		swap	d2
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
+		move.b	d5,d7
+		lsl.l	#8,d5
+		move.b	d7,d5
+		lsl.l	#8,d5
+		move.b	d7,d5
+		move.b	d1,d7
+		lsr.w	#4,d7
+		and.w	#3,d7
+		and.l	spr_col_shades(pc,d7.w*4),d5
 
-		cnop	0,4
-spr_col_01:	btst	#3,d1				;p0 new colour.
-		bne.s	spr_col_01_p01
-spr_col_01_p00:	btst	#2,d1				;p1 new colour.
-		bne.s	spr_col_01_p001
-spr_col_01_p000:bset	d5,d3
-		bclr	d4,d3
-		subq.b	#1,d5				;one down.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_01_p001:bclr	d5,d3
-		bset	d4,d3
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_01_p01:	btst	#2,d1				;p1 new colour.
-		bne.s	spr_col_01_p011
-spr_col_01_p010:bset	d5,d3
-		bset	d4,d3
-		subq.b	#1,d5				;one down.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_01_p011:bset	d4,d3
-		bset	d5,d3
-		swap	d6
-		bset	d5,d6				;adder set.
-		swap	d6
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
+		move.b	d6,d7
+		lsl.l	#8,d6
+		move.b	d7,d6
+		lsl.l	#8,d6
+		move.b	d7,d6
+		move.b	d1,d7
+		lsr.w	#6,d7
+		and.w	#3,d7
+		and.l	spr_col_shades(pc,d7.w*4),d6
 
-		cnop	0,4
-spr_col_p0set:	btst	d5,d3				;p0 bit test.
-		bne.s	spr_col_11			;it's 1!
-
-spr_col_10:	btst	#5,d1				;p0 new colour.
-		bne.s	spr_col_10_p01
-spr_col_10_p00:	btst	#4,d1				;p1 new colour.
-		bne.s	spr_col_10_p001
-spr_col_10_p000:bset	d5,d3
-		bclr	d4,d3
-		subq.b	#1,d5				;one down.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_10_p001:bclr	d5,d3
-		bset	d4,d3
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_10_p01:	btst	#4,d1				;p1 new colour.
-		bne.s	spr_col_10_p011
-spr_col_10_p010:bset	d5,d3
-		bset	d4,d3
-		subq.b	#1,d5				;one down.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_10_p011:bset	d5,d3
-		bset	d4,d3
-		swap	d6
-		bset	d5,d6				;adder set.
-		swap	d6
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
+		or.l	d5,d4
+		or.l	d6,d4
+		moveq.l	#0,d7
+		move.w	d3,d7
+		lsr.w	#8,d7
+		or.b	d3,d7
+		eor.b	#$ff,d7				;transparent source pixels.
+		move.w	d4,d3
+		move.l	d4,d6
+		and.l	#$00ff0000,d6
+		lsl.l	#8,d6
+		move.w	d7,d6
+		ror.w	#8,d6
+		or.b	#$ff,d6
+		ror.l	#8,d7
+		move.l	#$00ff0007,d5
+		or.l	d7,d5
+		move.l	(SP)+,d7
+		rts
 
 		cnop	0,4
-spr_col_11:	btst	#7,d1				;p0 new colour.
-		bne.s	spr_col_11_p01
-spr_col_11_p00:	btst	#6,d1				;p1 new colour.
-		bne.s	spr_col_11_p001
-spr_col_11_p000:bset	d5,d3
-		bclr	d4,d3
-		subq.b	#1,d5				;one down.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_11_p001:bclr	d5,d3
-		bset	d4,d3
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_11_p01:	btst	#6,d1				;p1 new colour.
-		bne.s	spr_col_11_p011
-spr_col_11_p010:bset	d5,d3
-		bset	d4,d3
-		subq.b	#1,d5				;one down.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
-spr_col_11_p011:bset	d5,d3
-		bset	d4,d3
-		swap	d6
-		bset	d5,d6				;adder set.
-		swap	d6
-		subq.b	#1,d5				;one down. do no changes.
-		dbra	d4,spr_col_do			;next colour.
-		rts					;exit.
+spr_col_shades:	dc.l	$0000ff00,$000000ff,$0000ffff,$00ffffff
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		output the created view
@@ -1022,7 +1000,18 @@ no_cyber_screen_read:
 read_pixels_a_lot:
 		move.l	graphics_base,a6
 		move.l	game_array,a2
+		gfx_time_start
+		cmp.b	#2,old_render
+		bne.s	read_pixels_os
+		IFEQ	GFX_COMPARE_READBACK
+		tst.b	window_direct_readback
+		beq.s	read_pixels_os
+		ENDC
+		bra.w	window_read_pixels
+read_pixels_os:
 		jsr	ReadPixelArray8(a6)
+read_pixels_ready:
+		gfx_time_end gfx_prof_read
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		scaling
@@ -1041,6 +1030,8 @@ read_pixels_a_lot:
 
 		cmp.w	#320,d0
 		beq.w	scaling_320xb
+		cmp.w	#160,d0
+		beq.w	scaling_160xb
 
 		bsr.w	convert_array_pens
 
@@ -1048,7 +1039,8 @@ read_pixels_a_lot:
 ;		scaling (a x b)
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-scaling_axb:	move.l	#160*256,d2
+scaling_axb:	gfx_time_start
+		move.l	#160*256,d2
 		move.l	#144*256,d3
 		divu.l	d0,d2
 		divu.l	d1,d3
@@ -1056,31 +1048,132 @@ scaling_axb:	move.l	#160*256,d2
 		subq.w	#1,d4
 		move.w	d1,d5
 		subq.w	#1,d5
-		moveq.l	#0,d7
-
-compute_scaling_y:
+		move.l	window_scale_table,a6
+		move.l	a6,a3
 		move.w	d4,d6
 		moveq.l	#0,d0
-		move.l	d7,d1
-		lsr.l	#8,d1
-		mulu.w	#160,d1
-		lea	(a0,d1.l),a4
-compute_scaling_x:
+;		Every row uses the same horizontal 8.8 coordinates. A source X fits in a byte.
+build_scale_x:
 		move.l	d0,d1
 		lsr.l	#8,d1
-		move.b	(a4,d1.l),(a1)+
+		move.b	d1,(a3)+
 		add.l	d2,d0
-		dbra	d6,compute_scaling_x
+		dbra	d6,build_scale_x
+
+		moveq.l	#0,d0
+		moveq.l	#0,d7
+		moveq.l	#-1,d2				;no source row drawn yet.
+
+compute_scaling_y:
+		move.l	d7,d1
+		lsr.l	#8,d1
+		cmp.l	d2,d1
+		beq.s	reuse_scaled_row
+		move.l	d1,d2
+		move.l	a1,a5				;start of this output row.
+		move.w	d4,d6
+		move.l	a6,a3
+		mulu.w	#160,d1
+		lea	(a0,d1.l),a4
+		subq.w	#7,d6				;(width-8)/8 is the DBRA count.
+		bmi.s	compute_scaling_x_tail
+		lsr.w	#3,d6
+compute_scaling_x_block:
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		dbra	d6,compute_scaling_x_block
+compute_scaling_x_tail:
+		move.w	d4,d6
+		and.w	#7,d6				;(width-1)&7: 7 means no tail.
+		cmp.w	#7,d6
+		beq.s	scale_the_image_next_line
+compute_scaling_x_byte:
+		move.b	(a3)+,d0
+		move.b	(a4,d0.w),(a1)+
+		dbra	d6,compute_scaling_x_byte
 scale_the_image_next_line:
 		add.l	d3,d7
 		dbra	d5,compute_scaling_y
+		bra.w	data_scaling_exit
+
+reuse_scaled_row:move.l	a5,a3
+		move.w	d4,d6
+		move.w	d4,d1
+		addq.w	#1,d1
+		and.w	#15,d1				;bytes after the last full block.
+		sub.w	d1,d6
+		bmi.s	reuse_scaled_row_tail
+		lsr.w	#5,d6				;odd number of 16-byte blocks starts halfway.
+		bcc.s	reuse_scaled_row_half
+reuse_scaled_row_block:
+		move.l	(a3)+,(a1)+
+		move.l	(a3)+,(a1)+
+		move.l	(a3)+,(a1)+
+		move.l	(a3)+,(a1)+
+reuse_scaled_row_half:
+		move.l	(a3)+,(a1)+
+		move.l	(a3)+,(a1)+
+		move.l	(a3)+,(a1)+
+		move.l	(a3)+,(a1)+
+		dbra	d6,reuse_scaled_row_block
+reuse_scaled_row_tail:
+		subq.w	#1,d1
+		bmi.s	scale_the_image_next_line
+reuse_scaled_row_byte:
+		move.b	(a3)+,(a1)+
+		dbra	d1,reuse_scaled_row_byte
+		bra.s	scale_the_image_next_line
+
+;		Native width: copy whole rows, using the same vertical step as scaling_axb.
+scaling_160xb:	cmp.w	#144,d1
+		beq.w	no_data_scaling
+		bsr.w	convert_array_pens
+		gfx_time_start
+		move.l	#144*256,d3
+		divu.l	d1,d3
+		subq.w	#1,d1
+		moveq.l	#0,d7
+
+scaling_160_y:	move.l	d7,d2
+		lsr.l	#8,d2
+		mulu.w	#160,d2
+		lea	(a0,d2.l),a4
+		moveq.l	#160/32-1,d6
+scaling_160_x:	move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		dbra	d6,scaling_160_x
+		add.l	d3,d7
+		dbra	d1,scaling_160_y
 		bra.w	data_scaling_exit
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		scaling (320 x b)
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-scaling_320xb:	cmp.w	#144,d1
+scaling_320xb:	bsr.w	build_scale_pen_pairs
+		gfx_time_start
+		moveq.l	#0,d0
+		cmp.w	#144,d1
 		beq.w	scaling_320x144
 		cmp.w	#288,d1
 		beq.w	scaling_320x288
@@ -1090,49 +1183,71 @@ scaling_320xb:	cmp.w	#144,d1
 		move.w	d1,d5
 		subq.w	#1,d5
 		moveq.l	#0,d7
-		move.l	pen_conversion_table,a6
+		moveq.l	#-1,d2				;no source row drawn yet.
 
 compute_scaling_320_y:
-		moveq.l	#160/2-1,d6
 		move.l	d7,d1
 		lsr.l	#8,d1
+		cmp.l	d2,d1
+		beq.s	reuse_scaled_row_320
+		move.l	d1,d2
+		move.l	a1,a3				;start of the expanded row.
+		moveq.l	#160/2-1,d6
 		mulu.w	#160,d1
 		lea	(a0,d1.l),a4
 compute_scaling_320_x:
-		moveq.l	#0,d0
-		move.w	(a4)+,d0
-		move.w	(a6,d0.l*2),d0
-		lsl.l	#8,d0
-		lsr.w	#8,d0
-		move.l	d0,d1
-		lsl.l	#8,d0
-		or.l	d1,d0
-		move.l	d0,(a1)+
+		move.b	(a4)+,d0
+		lsl.b	#4,d0
+		or.b	(a4)+,d0
+		move.l	(a6,d0.w*4),(a1)+
 		dbra	d6,compute_scaling_320_x
 scale_the_image_next_line_320:
 		add.l	d3,d7
 		dbra	d5,compute_scaling_320_y
 		bra.w	data_scaling_exit
 
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+reuse_scaled_row_320:
+		move.l	a3,a4
+		moveq.l	#320/32-1,d6
+reuse_scaled_row_320_block:
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		move.l	(a4)+,(a1)+
+		dbra	d6,reuse_scaled_row_320_block
+		bra.s	scale_the_image_next_line_320
+
+;		Expand a pair into four pixels, optionally copying to the next row.
+scale_window_pair: MACRO
+		move.b	(a0)+,d0
+		lsl.b	#4,d0
+		or.b	(a0)+,d0
+		IFEQ	\1
+		move.l	(a6,d0.w*4),(a1)+
+		ELSE
+		move.l	(a6,d0.w*4),d2
+		move.l	d2,320(a1)
+		move.l	d2,(a1)+
+		ENDC
+		ENDM
+
+;ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 ;		scaling (320 x 144)
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 scaling_320x144:subq.w	#1,d1
-		move.l	pen_conversion_table,a6
 
 compute_scaling_320x144_y:
-		moveq.l	#160/2-1,d6
+		moveq.l	#160/8-1,d6
 compute_scaling_320x144_x:
-		moveq.l	#0,d0
-		move.w	(a0)+,d0
-		move.w	(a6,d0.l*2),d0
-		lsl.l	#8,d0
-		lsr.w	#8,d0
-		move.l	d0,d2
-		lsl.l	#8,d0
-		or.l	d2,d0
-		move.l	d0,(a1)+
+		scale_window_pair 0
+		scale_window_pair 0
+		scale_window_pair 0
+		scale_window_pair 0
 		dbra	d6,compute_scaling_320x144_x
 scale_the_image_next_line_320x144:
 		dbra	d1,compute_scaling_320x144_y
@@ -1143,28 +1258,21 @@ scale_the_image_next_line_320x144:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 scaling_320x288:move.w	#144-1,d1
-		move.l	pen_conversion_table,a6
 
 compute_scaling_320x288_y:
-		moveq.l	#160/2-1,d6
+		moveq.l	#160/8-1,d6
 compute_scaling_320x288_x:
-		moveq.l	#0,d0
-		move.w	(a0)+,d0
-		move.w	(a6,d0.l*2),d0
-		lsl.l	#8,d0
-		lsr.w	#8,d0
-		move.l	d0,d2
-		lsl.l	#8,d0
-		or.l	d2,d0
-		move.l	d0,(a1)
-		move.l	d0,320(a1)
-		addq.l	#4,a1
+		scale_window_pair 1
+		scale_window_pair 1
+		scale_window_pair 1
+		scale_window_pair 1
 		dbra	d6,compute_scaling_320x288_x
 scale_the_image_next_line_320x288:
 		add.l	#320,a1
 		dbra	d1,compute_scaling_320x288_y
 
 data_scaling_exit:
+		gfx_time_end gfx_prof_scale
 		move.l	game_scale_array,a2
 		move.l	wzonka_game_x,d2
 		move.l	wzonka_game_y,d3
@@ -1184,6 +1292,32 @@ cyber_screen_data_exit:
 		move.l	#143,d3
 		rts
 
+;		4-bit source pens index [left, left, right, right] at (left<<4)|right.
+;		Rebuild from the current Window palette; no state survives between draws.
+build_scale_pen_pairs:
+		gfx_time_start
+		move.l	window_scale_table,a6
+		move.l	a6,a2
+		lea	gameboy_colours_conversion_table,a3
+		moveq.l	#16-1,d2
+scale_pen_left:
+		move.b	(a3)+,d4
+		move.b	d4,d5
+		lsl.w	#8,d4
+		move.b	d5,d4
+		swap	d4
+		lea	gameboy_colours_conversion_table,a5
+		moveq.l	#16-1,d6
+scale_pen_right:
+		move.b	(a5),d4
+		lsl.w	#8,d4
+		move.b	(a5)+,d4
+		move.l	d4,(a2)+
+		dbra	d6,scale_pen_right
+		dbra	d2,scale_pen_left
+		gfx_time_end gfx_prof_pens
+		rts
+
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		output the data
 ;		INPUT:
@@ -1194,22 +1328,31 @@ cyber_screen_data_exit:
 
 output_the_data:move.l	wzonka_ptr,a0
 		move.l	wd_RPort(a0),a0
+output_screen_pixels:
+		bsr.w	sync_os_screen
+		bra.s	output_the_data_rest
+
+sync_os_screen:
 		tst.b	os_screen_speed_limit
-		beq.w	output_the_data_rest
+		beq.s	os_screen_sync_exit
+		gfx_time_start
 		movem.l	d2/d3/a0/a2,-(SP)
 		tst.b	forbid_permit_status	;multitasking?
-		bne.s	window_sync_wait		;yes.
+		bne.s	os_screen_sync_wait		;yes.
 		move.l	exec_base,a6
 		jsr	Permit(a6)
-window_sync_wait:
+os_screen_sync_wait:
 		move.l	graphics_base,a6
 		jsr	WaitTOF(a6)			;sync to the monitor.
 		tst.b	forbid_permit_status
-		bne.s	window_sync_done
+		bne.s	os_screen_sync_done
 		move.l	exec_base,a6
 		jsr	Forbid(a6)
-window_sync_done:
+os_screen_sync_done:
 		movem.l	(SP)+,d2/d3/a0/a2
+		gfx_time_end gfx_prof_wait
+os_screen_sync_exit:
+		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		output the data - rest
@@ -1233,7 +1376,9 @@ output_the_data_rest:
 no_cyber_routines:
 		move.l	graphics_base,a6
 		move.l	game_output_tmp_rast_port,a1
+		gfx_time_start
 		jsr	WritePixelArray8(a6)
+		gfx_time_end gfx_prof_upload
 		rts
 
 use_cyber_routines:
@@ -1247,7 +1392,9 @@ use_cyber_routines:
 		moveq.l	#0,d3
 		moveq.l	#0,d4
 		move.l	#RECTFMT_LUT8,d7
+		gfx_time_start
 		jsr	WritePixelArray(a6)
+		gfx_time_end gfx_prof_upload
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -1256,6 +1403,7 @@ use_cyber_routines:
 
 		cnop	0,4
 convert_array_pens:
+		gfx_time_start
 		move.l	game_array,a3
 		move.l	pen_conversion_table,a4
 		move.w	#160*144/2/8-1,d6
@@ -1277,13 +1425,14 @@ convert_array:	move.w	(a3),d7
 		move.w	(a3),d7
 		move.w	(a4,d7.l*2),(a3)+
 		dbra	d6,convert_array
+		gfx_time_end gfx_prof_pens
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		output a screen
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-screen_screen:	tst.l	cyber_base
+screen_screen:	tst.l	output_cyber_status
 		bne.w	cyber_screen
 
 		tst.b	gb_buffer_no
@@ -1323,14 +1472,10 @@ use_these_values:
 		move.l	a2,ri_BitMap(a1)
 
 		move.l	graphics_base,a6
+		gfx_time_start
 		jsr	ScrollVPort(a6)
-
-		tst.b	os_screen_speed_limit
-		beq.s	no_speed_limit
-
-		jsr	WaitTOF(a6)
-
-no_speed_limit:	rts
+		gfx_time_end gfx_prof_upload
+		bra.w	sync_os_screen
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		cybergraphics screen
@@ -1340,4 +1485,4 @@ cyber_screen:	bsr.w	read_pixels_and_scale
 
 		move.l	gb_screen_ptr,a0		;the screen.
 		lea	sc_RastPort(a0),a0
-		bra.w	output_the_data_rest
+		bra.w	output_screen_pixels

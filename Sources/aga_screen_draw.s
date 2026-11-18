@@ -23,9 +23,22 @@ wait_II:	tst.b	visual_frame
 wait_I:		tst.b	visual_frame
 		beq.s	wait_I
 
-wait_done:	bsr.w	screen_aga_bg
+wait_done:
+		gfx_time_start
+		bsr.w	screen_aga_bg
+		gfx_time_end gfx_prof_aga_bg
+		gfx_time_start
 		bsr.w	screen_aga_win
+		gfx_time_end gfx_prof_aga_win
+		IFNE	GFX_PROFILE
+		move.b	#1,gfx_profile_aga_sample
+		ENDC
+		gfx_time_start
 		bsr.w	screen_aga_sprs
+		gfx_time_end gfx_prof_aga_spr
+		IFNE	GFX_PROFILE
+		clr.b	gfx_profile_aga_sample
+		ENDC
 		bsr.w	update_aga_pal
 		bsr.w	swap_aga_buffex			;swap the lists.
 
@@ -51,7 +64,7 @@ wait_In:	tst.b	visual_frame
 wait_donen:	clr.l	lcd_control			;sprites off -> clear.
 							;window off -> clear.
 							;background off -> clear.
-		bsr.w	screen_aga_bg
+		bsr.w	screen_aga_clear_the_background
 		bsr.w	screen_aga_win
 		bsr.w	screen_aga_sprs
 		bsr.w	update_aga_pal			;update the palette.
@@ -138,59 +151,63 @@ screen_aga_bg:	move.l	d7,d0				;d0 = lcd control byte.
 		add.l	#40*8*16+64/8-1,a0		;position fix.
 		moveq.l	#(144/8)+1-1,d0			;y.
 		move.l	tile_adder,d2			;d2 = tile adder.
-		moveq.l	#0,d3				;speed up.
 
 		cnop	0,4
 screen_aga_colu:movem.l	d6/d7/a0,-(SP)
-		moveq.l	#8-1,d6
+		moveq.l	#8/2-1,d6
 		move.w	d2,d3
-		move.l	a2,a3
 		add.b	(a1,d7.l),d3			;d3 = left tile.
 		move.l	a0,a4				;a4 = data out.
 		addq.b	#1,d7
 		lsl.w	#4,d3				;d3 = d3 * 16.
 		and.b	#%11111,d7
-		add.l	d3,a3				;a3 = data in.
+		lea	(a2,d3.w),a3			;a3 = data in.
 		addq.l	#1,a0				;next x (after next loop).
 
-screen_aga_bdat:move.w	(a3)+,d4			;d4 = 00.B, 01.B.
-		move.b	d4,40(a4)			;01.B.
+screen_aga_pack_margin: MACRO
+		move.w	(a3)+,d4
+		move.b	d4,\2
 		lsr.w	#8,d4
-		move.b	d4,(a4)				;00.B.
-		add.l	#40*8,a4
-		dbra	d6,screen_aga_bdat		;do the marginal bytes.
+		move.b	d4,\1
+		ENDM
+
+screen_aga_bdat: screen_aga_pack_margin (a4),40(a4)
+		screen_aga_pack_margin 320(a4),360(a4)
+		add.l	#2*40*8,a4
+		dbra	d6,screen_aga_bdat		;next pair of rows.
 
 		moveq.l	#(160/8)/4-1,d1			;x.
+; Tile offsets fit in a positive word (0..4080); ignore packed pixels in d3's high word.
 screen_aga_rows:move.w	d2,d3
 		add.b	(a1,d7.l),d3			;d3 = left tile.
 		addq.b	#1,d7
 		lsl.w	#4,d3				;d3 = d3 * 16.
 		and.b	#%11111,d7
-		lea	(a2,d3.l),a3
+		lea	(a2,d3.w),a3
 
 		move.w	d2,d3
 		add.b	(a1,d7.l),d3			;d3 = left tile.
 		addq.b	#1,d7
 		lsl.w	#4,d3				;d3 = d3 * 16.
 		and.b	#%11111,d7
-		lea	(a2,d3.l),a4
+		lea	(a2,d3.w),a4
 
 		move.w	d2,d3
 		add.b	(a1,d7.l),d3			;d3 = left tile.
 		addq.b	#1,d7
 		lsl.w	#4,d3				;d3 = d3 * 16.
 		and.b	#%11111,d7
-		lea	(a2,d3.l),a5
+		lea	(a2,d3.w),a5
 
 		move.w	d2,d3
 		add.b	(a1,d7.l),d3			;d3 = left tile.
 		addq.b	#1,d7
 		lsl.w	#4,d3				;d3 = d3 * 16.
 		and.b	#%11111,d7
-		lea	(a2,d3.l),a6
+		lea	(a2,d3.w),a6
 
-		moveq.l	#8-1,d6
-screen_aga_out:	move.w	(a3)+,d3
+screen_aga_pack_row: MACRO
+		move.w	(a3)+,d3
 		lsl.l	#8,d3
 		move.w	d3,d5
 		move.w	(a4)+,d3
@@ -202,14 +219,18 @@ screen_aga_out:	move.w	(a3)+,d3
 		lsl.l	#8,d5
 		move.w	(a6)+,d4
 		move.b	d4,d5				;d5 = p1 data.
-		move.l	d5,40(a0)
+		move.l	d5,\2
 		lsr.w	#8,d4
 		move.b	d4,d3				;d3 = p0 data.
-		move.l	d3,(a0)
-		add.l	#8*40,a0
-		dbra	d6,screen_aga_out		;next y.
+		move.l	d3,\1
+		ENDM
 
-		moveq.l	#0,d3				;speed up reset.
+		moveq.l	#8/2-1,d6
+screen_aga_out:	screen_aga_pack_row (a0),40(a0)
+		screen_aga_pack_row 320(a0),360(a0)
+		add.l	#2*8*40,a0
+		dbra	d6,screen_aga_out		;next pair of rows.
+
 		sub.l	#8*8*40-4,a0			;next x.
 		dbra	d1,screen_aga_rows		;next four blocks.
 
@@ -233,31 +254,25 @@ screen_aga_tup:	sub.l	#32*31,a1			;back to the beginning.
 
 screen_aga_clear_the_background:
 		move.l	aga_map_inactive,a0
-		move.w	#256,d0
+		moveq.l	#256/2-1,d0			;two rows per iteration.
 		moveq.l	#0,d1
+		moveq.l	#0,d2
+		moveq.l	#0,d3
+		moveq.l	#0,d4
+		moveq.l	#0,d5
+		moveq.l	#0,d6
+		moveq.l	#0,d7
+		move.l	d1,a1
+		move.l	d1,a2
+		move.l	d1,a3
 
+; Clear only the first two 40-byte planes of each 320-byte row.
 screen_aga_clear_the_background_loop:
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+			;40.
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+
-		move.l	d1,(a0)+			;80.
-		add.l	#(320/8)*6,a0
+		movem.l	d1-d7/a1-a3,(a0)
+		movem.l	d1-d7/a1-a3,40(a0)
+		movem.l	d1-d7/a1-a3,320(a0)
+		movem.l	d1-d7/a1-a3,360(a0)
+		lea	640(a0),a0
 		dbra	d0,screen_aga_clear_the_background_loop
 		rts
 
@@ -265,59 +280,57 @@ screen_aga_clear_the_background_loop:
 ;		do the sprites
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		cnop	0,4
-screen_aga_sprs:move.l	aga_map_inactive,a0		;the sprite area.
-		add.l	#40*8*16+4+40*4,a0		;a0 = sprite plane 0.
-		move.l	#40*8,d2			;a speed up.
+aga_clear_sprite_row: MACRO
+		tst.b	\1(a2)
+		beq.s	aga_clear_sprite_row_done\@
+		clr.b	\1(a2)
+		movem.l	d1/d3-d7,\2(a0)
+		movem.l	d1/d3-d7,\3(a0)
+aga_clear_sprite_row_done\@:
+		ENDM
 
+; The 144 visible flags form 36 complete groups starting at row 16.
+aga_clear_sprite_list:
+		lea	16(a2),a2
+		moveq.l	#144/4-1,d0
+aga_clear_sprite_group:
+		tst.l	(a2)
+		beq.s	aga_clear_sprite_next
+		aga_clear_sprite_row 0,0,40
+		aga_clear_sprite_row 1,320,360
+		aga_clear_sprite_row 2,640,680
+		aga_clear_sprite_row 3,960,1000
+aga_clear_sprite_next:
+		addq.l	#4,a2
+		lea	1280(a0),a0			;four 320-byte rows.
+		dbra	d0,aga_clear_sprite_group
+		rts
+
+		cnop	0,4
+screen_aga_sprs:gfx_aga_part_start
+; Six zero longwords cover the existing 24-byte span in each plane.
+		moveq.l	#0,d1
+		moveq.l	#0,d3
+		moveq.l	#0,d4
+		moveq.l	#0,d5
+		moveq.l	#0,d6
+		moveq.l	#0,d7
+
+		move.l	aga_map_inactive,a0
+		add.l	#40*8*16+4+40*4,a0		;sprite plane 0.
 		move.l	aga_sprs_inactive,a2
-		add.l	#16,a2				;skip the first 16 rows.
-		move.w	#144-1,d0
-		cnop	0,4
-spr_aga_empty:	tst.b	(a2)
-		bne.s	aga_clear_me
-		add.l	d2,a0
-		addq.l	#1,a2
-		dbra	d0,spr_aga_empty
-		bra.s	aga_lines_done
-aga_clear_me:	clr.b	(a2)+
-		moveq.l	#(160+64-32)/8/4-1,d1
-		move.l	a0,a1
-		lea	40(a0),a3
-aga_clear_us:	clr.l	(a1)+
-		clr.l	(a3)+
-		dbra	d1,aga_clear_us
-		add.l	d2,a0
-		dbra	d0,spr_aga_empty
-
-aga_lines_done:	move.l	aga_map_inactive,a0		;the sprite area.
-		add.l	#40*8*16+4+40*6,a0		;a0 = sprite plane 2.
-
+		bsr.w	aga_clear_sprite_list
+		move.l	aga_map_inactive,a0
+		add.l	#40*8*16+4+40*6,a0		;sprite plane 2.
 		move.l	aga_sprs_inactive_x,a2
-		add.l	#16,a2				;skip the first 16 rows.
-		move.w	#144-1,d0
-		cnop	0,4
-xspr_aga_empty:	tst.b	(a2)
-		bne.s	xaga_clear_me
-		add.l	d2,a0
-		addq.l	#1,a2
-		dbra	d0,xspr_aga_empty
-		bra.s	xaga_lines_done
-xaga_clear_me:	clr.b	(a2)+
-		moveq.l	#(160+64-32)/8/4-1,d1
-		move.l	a0,a1
-		lea	40(a0),a3
-xaga_clear_us:	clr.l	(a1)+
-		clr.l	(a3)+
-		dbra	d1,xaga_clear_us
-		add.l	d2,a0
-		dbra	d0,xspr_aga_empty
+		bsr.w	aga_clear_sprite_list
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		line clearing has been executed
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-xaga_lines_done:move.l	lcd_control,d1			;d1 = lcd control byte.
+		gfx_aga_part_end gfx_prof_aga_clear
+		move.l	lcd_control,d1			;d1 = lcd control byte.
 		btst	#1,d1				;sprites off?
 		beq.w	aga_spr_exit			;yes.
 
@@ -326,7 +339,6 @@ xaga_lines_done:move.l	lcd_control,d1			;d1 = lcd control byte.
 		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
 		add.l	#$8000,a1			;a1 = sprite pattern table.
 		moveq.l	#40-1,d0			;d0 = number of sprites.
-		move.l	#40,d6				;speed up.
 		move.l	x_flip_table,a2			;        .
 
 		btst	#2,d1				;sprite size?
@@ -342,7 +354,6 @@ aspr_n8x16:	move.l	#16-1,sprite_y
 ;		sprite size 8xq, q=8/16.
 ;		INPUT:
 ;		d0	= number of sprites.
-;		d6	= 40 (a speed up).
 ;		a0	= sprite attribute table.
 ;		a1	= sprite pattern area.
 ;		a2	= x flip table.
@@ -404,6 +415,26 @@ pal_pla_done:	move.l	sprite_y,d7			;d7 = y-1.
 		btst	#5+24,d1			;x flipped?
 		bne.s	aga_spr_x			;yes.
 
+; Merge in a register to avoid writing the intermediate mask into CHIP RAM.
+; Arguments: keep mask, new pixels, scratch register, destination.
+aga_spr_merge_word: MACRO
+		move.w	\4,\3
+		and.w	\1,\3
+		or.w	\2,\3
+		move.w	\3,\4
+		ENDM
+
+; Planes are 40 bytes apart; advance each pair by the full row stride.
+aga_spr_merge_row: MACRO
+		aga_spr_merge_word d5,d3,d6,(a4)
+		aga_spr_merge_word d5,d4,d6,40(a4)
+		lea	320(a4),a4
+
+		and.w	d5,(a5)
+		and.w	d5,40(a5)
+		lea	320(a5),a5
+		ENDM
+
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		normal sprite output
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -424,17 +455,7 @@ aga_spr_normal:	move.w	(a6)+,d3
 		or.w	d4,d5
 		eor.w	d1,d5
 
-		and.w	d5,(a4)				;mask p0.
-		or.w	d3,(a4)
-		add.l	d6,a4
-		and.w	d5,(a4)				;mask p1.
-		or.w	d4,(a4)
-		add.l	#40*7,a4			;next y.
-
-		and.w	d5,(a5)
-		add.l	d6,a5
-		and.w	d5,(a5)
-		add.l	#40*7,a5
+		aga_spr_merge_row
 
 		dbra	d7,aga_spr_normal		;next y (sprite data).
 aspr_xit:	dbra	d0,aspr_c8xq			;next sprite.
@@ -470,17 +491,7 @@ aga_spr_xz:	move.w	(a6)+,d3
 		or.w	d4,d5
 		eor.w	d1,d5
 
-		and.w	d5,(a4)				;mask p0.
-		or.w	d3,(a4)
-		add.l	d6,a4
-		and.w	d5,(a4)				;mask p1.
-		or.w	d4,(a4)
-		add.l	#40*7,a4			;next y.
-
-		and.w	d5,(a5)
-		add.l	d6,a5
-		and.w	d5,(a5)
-		add.l	#40*7,a5
+		aga_spr_merge_row
 
 		dbra	d7,aga_spr_xz			;next y (sprite data).
 		dbra	d0,aspr_c8xq			;next sprite.
@@ -526,17 +537,7 @@ aga_spr_yz:	move.w	-(a6),d3
 		or.w	d4,d5
 		eor.w	d1,d5
 
-		and.w	d5,(a4)				;mask p0.
-		or.w	d3,(a4)
-		add.l	d6,a4
-		and.w	d5,(a4)				;mask p1.
-		or.w	d4,(a4)
-		add.l	#40*7,a4			;next y.
-
-		and.w	d5,(a5)
-		add.l	d6,a5
-		and.w	d5,(a5)
-		add.l	#40*7,a5
+		aga_spr_merge_row
 
 		dbra	d7,aga_spr_yz			;next y (sprite data).
 		dbra	d0,aspr_c8xq			;next sprite.
@@ -572,17 +573,7 @@ aga_spr_xyz:	move.w	-(a6),d3
 		or.w	d4,d5
 		eor.w	d1,d5
 
-		and.w	d5,(a4)				;mask p0.
-		or.w	d3,(a4)
-		add.l	d6,a4
-		and.w	d5,(a4)				;mask p1.
-		or.w	d4,(a4)
-		add.l	#40*7,a4			;next y.
-
-		and.w	d5,(a5)
-		add.l	d6,a5
-		and.w	d5,(a5)
-		add.l	#40*7,a5
+		aga_spr_merge_row
 
 		dbra	d7,aga_spr_xyz			;next y (sprite data).
 		dbra	d0,aspr_c8xq			;next sprite.
@@ -735,8 +726,8 @@ aga_win_data_do:move.l	tile_adder,d1
 		lea	(a1,d2.l),a3			;x1xx.
 		lea	(a1,d1.l),a2			;1xxx.
 
-		moveq.l	#8-1,d6
-aga_win_data_mv:move.w	(a2)+,d5
+aga_win_pack_row: MACRO
+		move.w	(a2)+,d5
 		move.b	d5,d4
 		lsl.w	#8,d4
 		lsl.l	#8,d5
@@ -749,11 +740,16 @@ aga_win_data_mv:move.w	(a2)+,d5
 		lsl.l	#8,d4
 		move.w	(a5)+,d3
 		move.b	d3,d4
-		move.l	d4,8(a6)
+		move.l	d4,\2
 		lsr.w	#8,d3
 		move.b	d3,d5
-		move.l	d5,(a6)
-		add.l	#16,a6
+		move.l	d5,\1
+		ENDM
+
+		moveq.l	#8/2-1,d6
+aga_win_data_mv: aga_win_pack_row (a6),8(a6)
+		aga_win_pack_row 16(a6),24(a6)
+		add.l	#2*16,a6
 		dbra	d6,aga_win_data_mv
 		sub.l	#16*8-4,a6			;next x.
 		dbra	d7,aga_win_data_do

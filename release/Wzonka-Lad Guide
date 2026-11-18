@@ -436,6 +436,12 @@
                                 GUI hacks might work with FAST RAM'ed
                                 bitmaps. Use at your own risk!
 
+  - Direct Window readback -->  Read the game window's bitmap directly
+                                instead of using the OS pixel readback.
+                                Off by default. Uncheck it to use the OS
+                                path again. AGA and Screen are unaffected.
+                                Use Save default to keep the setting.
+
   @{b}GameGenie patch code@{ub}
 
   - <The three boxes>     -->   Put three letters/digits into every three
@@ -485,6 +491,16 @@
                     be a multiplication of 16 (Wzonka-Lad fixes this
                     automatically). You had better have a graphics
                     card and a fast CPU to use the window driver!
+
+                    Activate the game window and use the top-row keys
+                    1-9 to set the game image width to 160-1440 pixels
+                    (160 times the number). Hold either Shift and press
+                    1-9 to set its height to 144-1296 pixels (144 times
+                    the number). The other dimension stays unchanged:
+                    for example, press 2 and Shift+2 for 320x288.
+                    A size that does not fit on the current screen or
+                    cannot be allocated is not applied. Shift still
+                    acts as a game control if the controller uses it.
 
   @{b}Variables@{ub}
 

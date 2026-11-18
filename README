@@ -24,6 +24,34 @@ I take no responsibility for anything.
 
 v1.11.00 (17-Nov-2026):
 
+* AGA Full packs background tiles in groups of four and simplifies
+  scanline sprite selection and placement
+* AGA Full writes each Game Boy window byte once per bitplane.
+  Shifted windows read the background only at the two edges
+* AGA x/153 copies background and Game Boy window data two rows at a
+  time, skips clean sprite rows in groups of four, and shares sprite
+  merging across all flip combinations
+* AGA x/153 batches bulk background clears and stays within the
+  allocated bitmap when the background or LCD is disabled
+* Both AGA refresh modes batch sprite-plane clears and merge sprite
+  words in registers to reduce bitplane reads and writes
+* Non-AGA sprite drawing remaps palettes a row at a time instead of
+  branching on individual pixels
+* OS Screen and Scalable Window share faster planar drawing. Full batches
+  sprite clears, simplifies sprite selection, and writes each Game Boy
+  window byte once per plane without spilling into the next row. x/153
+  copies background rows in pairs, skips clean sprite rows in groups of
+  four, and clears marked rows with batched stores
+* Scalable Window uses lookup tables, wider copy loops and repeat-row
+  reuse to reduce scaling work. Native-width output skips horizontal
+  scaling; 320x144 and 320x288 have dedicated routines
+* Misc settings includes optional Direct Window readback.
+* Number keys 1-9 resize the active Scalable Window's width; Shift+1-9
+  sets its height
+* An optional EClock build profiles Window and AGA drawing and writes
+  the results to T:Wzonka-GFX.txt on pause
+* Native Screen modes such as Lowres use planar output even when
+  CyberGraphX is installed. OS screen speed limit also works on RTG screens
 * Noise uses a shift-register pattern. The normal loop is 32767
   steps and the short metallic mode is 127. The sample changes
   only when that mode changes
@@ -111,24 +139,3 @@ v1.02.00 (23-Dec-2003):
 
 * Added few missing files (the routines directory)
 * Initial GPL 2 release
-
-
-3. SOUND QUALITY
-
-High updates AHI on sound-register writes and emulates envelopes and
-channel 1 frequency sweeps. Low also updates on writes, but omits those
-automatic sweeps to save CPU time. Both modes support live wave RAM changes.
-
-y Hz keeps AHI output updates at the selected rate (1-60 per second).
-Basic channel state and length timers still run between updates, but
-envelopes and frequency sweeps remain omitted. Short notes or rapid wave
-RAM changes can be missed; use High or Low for sampled speech.
-
-All modes share stereo routing, Game Boy master-volume scaling, pitch and
-noise-clock corrections. The AHI mixing frequency is a separate setting:
-try 22050 or 44100 Hz if the Amiga and output driver can sustain it.
-Existing saved settings and the default mixing frequency are unchanged.
-
-This remains a sample-based approximation, not a cycle-exact APU. Divider
-edge effects, exact oscillator phase, analog filtering and some obscure
-envelope/wave RAM behavior are not emulated.

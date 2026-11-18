@@ -23,6 +23,13 @@ scanline_draw:	tst.b	old_render			;aga mode?
 
 		bsr.w	push_z80
 
+		IFNE	GFX_PROFILE
+		move.l	gb_scanlines,d0
+		cmp.l	gfx_profile_line,d0
+		bne.s	scan_profile_start_done
+		gfx_time_start
+scan_profile_start_done:
+		ENDC
 		bsr.w	scan_draw_bg			;to the background.
 
 		move.l	aga_sprs_inactive,a1
@@ -37,18 +44,13 @@ scanline_draw:	tst.b	old_render			;aga mode?
 		add.l	d1,d0				;d0 = d0 * 20.
 		add.l	d0,a0
 		lea	2880(a0),a1
-;		moveq.l	#160/32-1,d0
+		moveq.l	#0,d0
+		moveq.l	#0,d1
+		moveq.l	#0,d2
 		moveq.l	#0,d3
-		move.l	d3,(a0)+
-		move.l	d3,(a1)+
-		move.l	d3,(a0)+
-		move.l	d3,(a1)+
-		move.l	d3,(a0)+
-		move.l	d3,(a1)+
-		move.l	d3,(a0)+
-		move.l	d3,(a1)+
-		move.l	d3,(a0)
-		move.l	d3,(a1)
+		moveq.l	#0,d4
+		movem.l	d0-d4,(a0)
+		movem.l	d0-d4,(a1)
 
 no_scn_spr_clr:	bsr.w	scan_window
 		clr.l	aga_spr_amount			;zero done on this scanline.
@@ -57,12 +59,25 @@ no_scn_spr_clr:	bsr.w	scan_window
 		add.l	gb_scanlines,a0
 		move.b	aga_spr_amount,(a0)
 
+		IFNE	GFX_PROFILE
+		move.l	gb_scanlines,d0
+		cmp.l	gfx_profile_line,d0
+		bne.s	scan_profile_end_done
+		gfx_time_end gfx_prof_planar
+scan_profile_end_done:
+		ENDC
 		cmp.l	#143,gb_scanlines		;time to update the palette
 		bne.s	no_scan_draw_x			;and draw the view?
 
 		bsr.w	update_bg_pal			;yes. do palette.
 		bsr.w	screen_draw_pl			;yes. do screen.
 		bsr.w	swap_lists_nor
+		IFNE	GFX_PROFILE
+		addq.l	#1,gfx_profile_line
+		cmp.l	#144,gfx_profile_line
+		blo.s	no_scan_draw_x
+		clr.l	gfx_profile_line
+		ENDC
 
 no_scan_draw_x:	bsr.w	pull_z80
 no_scan_draw:	rts					;exit.
@@ -271,23 +286,22 @@ sspr_pick:	move.l	gb_memory,a0
 		move.l	gb_scanlines,d4
 		add.l	#16,d4			;ly + 16.
 		move.l	sprite_y,d5
+		move.w	d4,d6
+		sub.w	d5,d6			;first OAM Y covering this line.
 		lea	spr_pick,a6
 		moveq.l	#0,d2
 		moveq.l	#40-1,d0
 sspr_pick_n:	move.l	(a0)+,d1			;y, x, tile, flags.
 		move.l	d1,d3
-		swap	d3
-		lsr.w	#8,d3			;d3 = y.
-		beq.s	sspr_pick_x
-		cmp.w	d3,d4			;line above the sprite?
-		blo.s	sspr_pick_x		;yes.
-		move.w	d3,d6
-		add.w	d5,d6
-		cmp.w	d6,d4			;line below the sprite?
-		bhi.s	sspr_pick_x		;yes.
+		rol.l	#8,d3			;Y in the low byte.
+; Visible LY keeps the accepted OAM Y range within 1..159.
+		sub.b	d6,d3
+		cmp.b	d5,d3
+		dbls	d0,sspr_pick_n
+		bhi.s	sspr_picked		;the final entry was rejected.
 		move.l	d1,(a6)+
 		addq.b	#1,d2			;hardware counts this one.
-sspr_pick_x:	dbra	d0,sspr_pick_n
+		dbra	d0,sspr_pick_n
 sspr_picked:	tst.b	d2
 		beq.w	exit_spr			;nothing on this line.
 		move.l	a6,a0			;draw the last pick first.
@@ -576,28 +590,47 @@ win_win_ok:	cmp.w	#160,d1
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		subq.w	#1,d3				;dbra correction.
-		move.w	#$00ff,d6
-		ror.w	d1,d6				;solid mask.
 		add.l	d2,a1				;y inside the block.
-		move.l	a3,a4
-		add.l	#160/8*144,a4
+		lea	2880(a3),a4
+		move.l	tile_adder,d2
+		tst.b	d1
+		beq.s	scan_win_aligned
+		move.w	#$00ff,d6
+		ror.w	d1,d6
+		lsr.w	#8,d6				;left edge keep mask.
+		move.b	(a3),d0
+		move.b	(a4),d7
+		and.w	d6,d0
+		and.w	d6,d7
+		lsl.w	d1,d0
+		lsl.w	d1,d7
 
-scan_win_solid:	move.l	tile_adder,d0
-		add.b	(a0)+,d0
-		lsl.w	#4,d0
-		move.w	(a1,d0.l),d4			;d4 = data.
-
-		move.b	d4,d5				;d5 = 1.B.
-		and.w	d6,(a3)
-		clr.b	d4
-		lsl.w	#8,d5
-		and.w	d6,(a4)
-		lsr.w	d1,d4				;shift data.
+; Carry the previous tile in the high byte of each plane's word.
+scan_win_solid:	move.w	d2,d5
+		add.b	(a0)+,d5
+		lsl.w	#4,d5
+		move.w	(a1,d5.w),d4
+		move.b	d4,d7
+		lsr.w	#8,d4
+		move.b	d4,d0
+		move.w	d7,d5
 		lsr.w	d1,d5
-
-		or.w	d4,(a3)
-		addq.l	#1,a3
-		or.w	d5,(a4)
-		addq.l	#1,a4
+		move.b	d5,(a4)+
+		move.w	d0,d4
+		lsr.w	d1,d4
+		move.b	d4,(a3)+
+		lsl.w	#8,d7
+		lsl.w	#8,d0
 		dbra	d3,scan_win_solid		;next byte.
+; No right-edge spill: the next byte belongs to a different scanline or plane.
 scan_draw_wxt:	rts
+
+scan_win_aligned:move.w	d2,d5
+		add.b	(a0)+,d5
+		lsl.w	#4,d5
+		move.w	(a1,d5.w),d4
+		move.b	d4,(a4)+
+		lsr.w	#8,d4
+		move.b	d4,(a3)+
+		dbra	d3,scan_win_aligned
+		rts

@@ -343,7 +343,7 @@ screen_draw_bg:	move.l	d7,d0				;d0 = lcd control byte.
 		lea	4224(a0),a3			;a3 = p1.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		copy 176x8 lines
+;		copy 21 tiles and the left margin, eight rows at a time
 ;		INPUT:
 ;		d2	= (background start y) / 8 * 32.
 ;		d3	= (background start x) / 8.
@@ -353,101 +353,121 @@ screen_draw_bg:	move.l	d7,d0				;d0 = lcd control byte.
 ;		a3	= output (p1).
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+screen_bg_tile:	MACRO
+		move.w	d1,d4
+		add.b	(a1,d3.w),d4
+		lsl.w	#4,d4
+		lea	(a2,d4.w),\1
+		addq.w	#1,d3
+		and.w	#31,d3
+		ENDM
+
+; The old left margin is $00 on plane 0 and the first tile's plane 0
+; byte on plane 1. Include it with three tiles in the first longword.
+screen_bg_pack_head: MACRO
+		moveq.l	#0,d4
+		move.w	(a4)+,d4
+		move.l	d4,d5
+		swap	d5
+		lsr.w	#8,d4
+		swap	d4
+		move.w	(a5)+,d6
+		move.b	d6,d5
+		lsl.w	#8,d5
+		move.w	(a6)+,d7
+		move.b	d7,d5
+		lsr.w	#8,d6
+		lsl.w	#8,d6
+		lsr.w	#8,d7
+		move.b	d7,d6
+		move.w	d6,d4
+		move.l	d4,\1
+		move.l	d5,\2
+		ENDM
+
+; Assemble both planes from four interleaved pattern words, as in AGA.
+screen_bg_pack_four: MACRO
+		move.w	(a4)+,d4
+		lsl.l	#8,d4
+		move.w	d4,d5
+		move.w	(a5)+,d4
+		move.b	d4,d5
+		lsl.l	#8,d5
+		lsl.l	#8,d4
+		move.w	(a6)+,d4
+		move.b	d4,d5
+		lsl.l	#8,d5
+		move.w	(a2)+,d6
+		move.b	d6,d5
+		move.l	d5,\2
+		lsr.w	#8,d6
+		move.b	d6,d4
+		move.l	d4,\1
+		ENDM
+
+screen_bg_pack_tail: MACRO
+		move.w	(a4)+,d4
+		move.b	d4,d5
+		lsl.w	#8,d5
+		move.w	(a5)+,d6
+		move.b	d6,d5
+		lsr.w	#8,d6
+		move.b	d6,d4
+		move.w	d4,\1
+		move.w	d5,\2
+		ENDM
+
+		add.l	d2,a1
 		moveq.l	#19-1,d0
-qdo_16x8_cdata:	move.l	d2,d7
-		or.b	d3,d7
-		move.l	d1,d4
-		add.b	(a1,d7.l),d4
-		lsl.w	#4,d4
-		lea	(a2,d4.l),a4
-
-		moveq.l	#4-1,d4
-so_16x8_cdata:	move.w	(a4)+,d5
-		move.w	d5,(a3)
-		lsr.w	#8,d5
-		move.w	d5,(a0)
-		move.w	(a4)+,d5
-		move.w	d5,24(a3)
-		lsr.w	#8,d5
-		move.w	d5,24(a0)
+screen_bg_band:	movem.l	d0/d2-d3/a0/a3,-(sp)
+		screen_bg_tile a4
+		screen_bg_tile a5
+		screen_bg_tile a6
+		moveq.l	#4-1,d0
+screen_bg_head:	screen_bg_pack_head (a0),(a3)
+		screen_bg_pack_head 24(a0),24(a3)
 		lea	48(a3),a3
 		lea	48(a0),a0
-		dbra	d4,so_16x8_cdata
+		dbra	d0,screen_bg_head
+		lea	-188(a0),a0			;rewind eight rows, advance four bytes.
+		lea	-188(a3),a3
 
-		add.w	#32,d2
-		and.w	#$3ff,d2
-		dbra	d0,qdo_16x8_cdata
-
-		sub.l	#((192/8)*8*19)-2,a0
-		sub.l	#((192/8)*8*19)-2,a3
-		addq.b	#1,d3
-		and.b	#$1f,d3
-		sub.w	#19*32,d2
-		and.w	#$3ff,d2
-
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		sweeper core
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-
-		move.l	#10,x_counter
-zdo_16x8_cdata:	moveq.l	#19-1,d0
-xdo_16x8_cdata:	move.l	d2,d7
-		or.b	d3,d7
-		move.l	d1,d4
-		add.b	(a1,d7.l),d4
-		lsl.w	#4,d4
-		addq.b	#1,d3
-		lea	(a2,d4.l),a4
-		and.b	#$1f,d3
-
-		move.l	d2,d7
-		or.b	d3,d7
-		move.l	d1,d4
-		add.b	(a1,d7.l),d4
-		lsl.w	#4,d4
-		subq.b	#1,d3
-		lea	(a2,d4.l),a5
-		and.b	#$1f,d3
-
-		moveq.l	#4-1,d4
-do_16x8_cdata:	move.w	(a4)+,d5
-		move.b	d5,d6
-		lsl.w	#8,d6
-		move.w	(a5)+,d7
-		move.b	d7,d6
-		lsr.w	#8,d7
-		move.b	d7,d5
-
-		move.w	d6,(a3)
-		move.w	d5,(a0)
-
-		move.w	(a4)+,d5
-		move.b	d5,d6
-		lsl.w	#8,d6
-		move.w	(a5)+,d7
-		move.b	d7,d6
-		lsr.w	#8,d7
-		move.b	d7,d5
-
-		move.w	d6,24(a3)
-		move.w	d5,24(a0)
+		move.l	a2,d7				;keep base while a2 reads tile four.
+		moveq.l	#4-1,d2
+screen_bg_group:	screen_bg_tile a4
+		screen_bg_tile a5
+		screen_bg_tile a6
+		screen_bg_tile a2
+		moveq.l	#4-1,d0
+screen_bg_four:	screen_bg_pack_four (a0),(a3)
+		screen_bg_pack_four 24(a0),24(a3)
 		lea	48(a3),a3
 		lea	48(a0),a0
-		dbra	d4,do_16x8_cdata
+		dbra	d0,screen_bg_four
+		lea	-188(a0),a0
+		lea	-188(a3),a3
+		move.l	d7,a2
+		dbra	d2,screen_bg_group
 
+; Bytes 22 and 23 are outside the background span.
+		screen_bg_tile a4
+		screen_bg_tile a5
+		moveq.l	#4-1,d0
+screen_bg_tail:	screen_bg_pack_tail (a0),(a3)
+		screen_bg_pack_tail 24(a0),24(a3)
+		lea	48(a3),a3
+		lea	48(a0),a0
+		dbra	d0,screen_bg_tail
+
+		movem.l	(sp)+,d0/d2-d3/a0/a3
+		lea	192(a0),a0
+		lea	192(a3),a3
+		lea	32(a1),a1
 		add.w	#32,d2
 		and.w	#$3ff,d2
-		dbra	d0,xdo_16x8_cdata
-
-		sub.l	#((192/8)*8*19)-2,a0
-		sub.l	#((192/8)*8*19)-2,a3
-		addq.b	#2,d3
-		and.b	#$1f,d3
-		sub.w	#19*32,d2
-		and.w	#$3ff,d2
-
-		subq.l	#1,x_counter
-		bne.s	zdo_16x8_cdata
+		bne.s	screen_bg_next
+		lea	-1024(a1),a1
+screen_bg_next:	dbra	d0,screen_bg_band
 
 xit_cdata:	rts
 
@@ -506,74 +526,171 @@ win_win_no_no:	move.l	d0,d6				;d6 = window y position.
 		move.l	d0,a2
 		add.l	bitmap_bg,a2			;a2 = output area (p0).
 		and.l	#%111,d1			;d1 = the inverted shift amount.
-		eor.b	#%111,d1			;d1 = the shift amount.
-		lea	4224(a2),a3			;a3 = output area (p1).
+		addq.w	#1,d1				;right shift of 1..8.
+		cmp.w	#8,d1
+		bne.s	win_frame_span
+		addq.l	#1,a2				;an 8-bit shift advances one byte.
+		moveq.l	#0,d1
+win_frame_span:
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		a non transparent h/w window emulator
 ;		INPUT:
-;		d0	= x and y added for the start position.
-;		d1	= the shift amount.
-;		d6	= window y position.
-;		d7	= window x position.
+;		d1	= right shift.
+;		d6/d7	= coarse window y/x.
 ;		a0	= window tiles.
 ;		a1	= window tile pattern table.
 ;		a2	= output area (p0).
-;		a3	=             (p1).
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		subq.l	#1,d7				;window x correction (h/w).
-		move.l	d7,tile_adder_x
 		neg.l	d7				;compute the difference.
-		sub.l	#160/8,tile_adder_x
-		add.l	#32,tile_adder_x
-		add.l	#160/8-1,d7
-		blt.w	screen_draw_wxt			;too much right.
-		move.l	d7,win_x
+		add.l	#160/8+1,d7
+		ble.s	screen_draw_wxt			;too much right.
 
 		neg.l	d6				;compute the difference.
-		add.l	#144/8-1,d6
-		blt.w	screen_draw_wxt			;too much down.
-
-		move.w	#$ff00,d4			;solid mask.
-		rol.w	d1,d4				;mask shifted.
-
-window_loop_y:	move.l	win_x,d7			;d7 = x-1.
-
-copy_8x8:	move.l	tile_adder,d5			;signum fix.
-		add.b	(a0)+,d5			;d5 = left up tile.
-		lsl.w	#4,d5				;d5 = d5 * 16.
-		lea	(a1,d5.l),a6			;a6 = tile data.
-
-		moveq.l	#8-1,d5
-copy_8x8_data:	moveq.l	#0,d3
-		move.w	(a6)+,d2			;d2 = L01.
-		move.b	d2,d3				;d3 = xxL1.
-		and.w	d4,(a2)
-		lsr.w	#8,d2				;d2 = xxL0.
-		and.w	d4,(a3)				;background masked.
-
-		lsl.w	d1,d2				;p0 shifted.
-		or.w	d2,(a2)				;p0 done.
-		lsl.w	d1,d3				;p1 shifted.
-		add.l	#192/8,a2			;next y (screen).
-		or.w	d3,(a3)				;p1 done.
-		add.l	#192/8,a3			;               .
-		dbra	d5,copy_8x8_data		;next y (register).
-
-		sub.l	#(8*192/8)-1,a2			;next x position.
-		sub.l	#(8*192/8)-1,a3			;               .
-		sub.l	#(8*192/8)-1,a4			;               .
-		sub.l	#(8*192/8)-1,a5			;               .
-		dbra	d7,copy_8x8			;do next 8x8.
-
-		add.l	#192/8*8,d0			;next 192x8 line.
-		move.l	d0,a2
-		add.l	bitmap_bg,a2			;a2 = output area (p0).
-		lea	4224(a2),a3			;a3 = output area (p1).
-		add.l	tile_adder_x,a0			;update input position.
-		dbra	d6,window_loop_y		;next y.
+		add.l	#144/8,d6
+		ble.s	screen_draw_wxt			;too much down.
+		move.l	d6,d0
+		lsl.w	#3,d0				;whole tile rows as before.
+		move.l	tile_adder,d2
+window_loop_y:	movem.l	d0/d7/a0-a2,-(sp)
+		move.l	d7,d3
+		move.l	a2,a3
+		lea	4224(a2),a4
+		bsr.w	win_span_spill
+		movem.l	(sp)+,d0/d7/a0-a2
+		lea	24(a2),a2
+		addq.l	#2,a1
+		subq.w	#1,d0
+		beq.s	screen_draw_wxt
+		move.w	d0,d4
+		and.w	#7,d4
+		bne.s	window_loop_y
+		lea	32(a0),a0
+		lea	-16(a1),a1
+		bra.s	window_loop_y
 screen_draw_wxt:rts
+
+; Shared one-row writer. A0 = tile IDs, A1 = pattern base plus row offset,
+; A3/A4 = plane destinations with the same alignment. D1 = right shift,
+; D2 = tile bias, D3 = positive byte count per plane. D1/D2 are preserved.
+win_span_tile:	MACRO
+		IFNE	\1
+		lsl.l	#8,d0
+		lsl.l	#8,d7
+		ENDC
+		move.w	d2,d5
+		add.b	(a0)+,d5
+		lsl.w	#4,d5
+		move.w	(a1,d5.w),d5
+		move.b	d5,d7
+		lsr.w	#8,d5
+		move.b	d5,d0
+		ENDM
+
+win_span_spill:	bset	#16,d3				;right edge fits in the row.
+win_span_draw:	tst.b	d1
+		beq.w	win_span_aligned
+		moveq.l	#32,d6
+		sub.w	d1,d6
+		moveq.l	#-1,d5
+		lsr.b	d1,d5
+		eor.b	#$ff,d5
+		move.b	(a3),d0
+		move.b	(a4),d7
+		and.b	d5,d0
+		and.b	d5,d7
+		ror.l	#8,d0				;keep bits at the top of each carry.
+		ror.l	#8,d7
+; Clear the unused lower bits; only the carry at bits 31..24 is combined.
+		and.l	#$ff000000,d0
+		and.l	#$ff000000,d7
+		move.l	d0,a5
+		move.l	d7,a6
+
+; Each carry is the last unshifted byte's spill, in the high bits of a long.
+win_span_shift_plane: MACRO
+		move.l	\1,d4
+		lsr.\4	d1,\1
+		move.l	\2,d5
+		IFEQ	\5
+		rol.l	#8,d5
+		ENDC
+		or.\4	d5,\1
+		lsl.l	d6,d4
+		move.l	d4,\2
+		move.\4	\1,(\3)+
+		ENDM
+
+win_span_shift:	cmp.w	#4,d3
+		blo.s	win_span_shift_byte
+		move.l	a3,d4
+		and.w	#3,d4
+		beq.s	win_span_shift_long
+win_span_shift_byte:
+		win_span_tile 0
+		win_span_shift_plane d0,a5,a3,b,0
+		win_span_shift_plane d7,a6,a4,b,0
+		subq.w	#1,d3
+		bne.s	win_span_shift
+		bra.s	win_span_shift_done
+win_span_shift_long:
+		win_span_tile 0
+		win_span_tile 1
+		win_span_tile 1
+		win_span_tile 1
+		win_span_shift_plane d0,a5,a3,l,1
+		win_span_shift_plane d7,a6,a4,l,1
+		subq.w	#4,d3
+		beq.s	win_span_shift_done
+		cmp.w	#4,d3
+		bhs.s	win_span_shift_long
+		bra.s	win_span_shift_byte
+
+win_span_shift_done:
+		btst	#16,d3
+		beq.s	win_span_done
+		moveq.l	#-1,d5
+		lsr.b	d1,d5
+		move.l	a5,d0
+		move.l	a6,d7
+		rol.l	#8,d0
+		rol.l	#8,d7
+		move.b	(a3),d4
+		and.b	d5,d4
+		or.b	d0,d4
+		move.b	d4,(a3)
+		move.b	(a4),d4
+		and.b	d5,d4
+		or.b	d7,d4
+		move.b	d4,(a4)
+win_span_done:	rts
+
+win_span_aligned:
+		cmp.w	#4,d3
+		blo.s	win_span_aligned_byte
+		move.l	a3,d4
+		and.w	#3,d4
+		beq.s	win_span_aligned_long
+win_span_aligned_byte:
+		win_span_tile 0
+		move.b	d0,(a3)+
+		move.b	d7,(a4)+
+		subq.w	#1,d3
+		bne.s	win_span_aligned
+		rts
+win_span_aligned_long:
+		win_span_tile 0
+		win_span_tile 1
+		win_span_tile 1
+		win_span_tile 1
+		move.l	d0,(a3)+
+		move.l	d7,(a4)+
+		subq.w	#4,d3
+		beq.s	win_span_done
+		cmp.w	#4,d3
+		bhs.s	win_span_aligned_long
+		bra.s	win_span_aligned_byte
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		do the sprites

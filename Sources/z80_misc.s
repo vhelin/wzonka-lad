@@ -342,25 +342,24 @@ z80_fetch_dispatch:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-write_d6_stack:	subq.w	#1,d5
-		move.l	d6,-(SP)
-		lsr.w	#8,d6					;d6 = upper data (h.B).
-		move.l	d5,d7
-
-		move.l	gb_mem_jumps,a6
-		jsr	([a6,d5.l*4])				;memory write.
-
-		subq.w	#1,d5
-		move.l	(SP)+,d6
-		move.l	d5,d7					;d7 = 00BB, because
-								;d5 = 00BB.
-		move.l	gb_mem_jumps,a6
-		jsr	([a6,d5.l*4])				;memory write.
-
+write_d6_stack:	bsr.s	write_d6_stackx
 		fetch_next_i
 
 		cnop	0,4
-write_d6_stackx:subq.w	#1,d5
+; Test the original SP: both bytes must belong to one ordinary RAM range.
+; SP=$de01 crosses the WRAM echo boundary; $ff81 crosses into I/O.
+write_d6_stackx:cmp.w	#$ff82,d5
+		bhs.s	write_stack_word
+		cmp.w	#$c002,d5
+		blo.s	write_stack_bytes
+		cmp.w	#$e000,d5
+		bhi.s	write_stack_bytes
+		cmp.w	#$de01,d5
+		blo.s	write_stack_mirrored
+		bhi.s	write_stack_word
+
+write_stack_bytes:
+		subq.w	#1,d5
 		move.l	d6,-(SP)
 		move.l	d5,d7
 		lsr.w	#8,d6					;d6 = upper data (h.B).
@@ -374,6 +373,21 @@ write_d6_stackx:subq.w	#1,d5
 								;d5 = 00BB.
 		move.l	gb_mem_jumps,a6
 		jsr	([a6,d5.l*4])				;memory write.
+		rts
+
+write_stack_word:
+		subq.w	#2,d5
+		ror.w	#8,d6					;Game Boy stack is little-endian.
+		move.w	d6,(a2,d5.l)
+		move.l	d5,d7					;keep the dispatch index zero-extended.
+		rts
+
+write_stack_mirrored:
+		subq.w	#2,d5
+		ror.w	#8,d6
+		move.w	d6,(a2,d5.l)
+		move.w	d6,$2000(a2,d5.l)
+		move.l	d5,d7
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

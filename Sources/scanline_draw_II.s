@@ -583,48 +583,9 @@ win_win_ok:	cmp.w	#160,d1
 ;		a3	= background plane 0.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		subq.w	#1,d3				;dbra correction.
 		add.l	d2,a1				;y inside the block.
 		lea	2880(a3),a4
 		move.l	tile_adder,d2
-		tst.b	d1
-		beq.s	scan_win_aligned
-		move.w	#$00ff,d6
-		ror.w	d1,d6
-		lsr.w	#8,d6				;left edge keep mask.
-		move.b	(a3),d0
-		move.b	(a4),d7
-		and.w	d6,d0
-		and.w	d6,d7
-		lsl.w	d1,d0
-		lsl.w	d1,d7
-
-; Carry the previous tile in the high byte of each plane's word.
-scan_win_solid:	move.w	d2,d5
-		add.b	(a0)+,d5
-		lsl.w	#4,d5
-		move.w	(a1,d5.w),d4
-		move.b	d4,d7
-		lsr.w	#8,d4
-		move.b	d4,d0
-		move.w	d7,d5
-		lsr.w	d1,d5
-		move.b	d5,(a4)+
-		move.w	d0,d4
-		lsr.w	d1,d4
-		move.b	d4,(a3)+
-		lsl.w	#8,d7
-		lsl.w	#8,d0
-		dbra	d3,scan_win_solid		;next byte.
 ; No right-edge spill: the next byte belongs to a different scanline or plane.
+		bra.w	win_span_draw
 scan_draw_wxt:	rts
-
-scan_win_aligned:move.w	d2,d5
-		add.b	(a0)+,d5
-		lsl.w	#4,d5
-		move.w	(a1,d5.w),d4
-		move.b	d4,(a4)+
-		lsr.w	#8,d4
-		move.b	d4,(a3)+
-		dbra	d3,scan_win_aligned
-		rts

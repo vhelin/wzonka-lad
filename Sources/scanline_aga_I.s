@@ -386,64 +386,11 @@ win_aga_ok:	cmp.w	#160,d1
 ;		a3	= background plane 0.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		subq.w	#1,d3				;dbra correction.
 		add.l	d2,a1				;y inside the block.
+		lea	40(a3),a4
 		move.l	tile_adder,d2
-		tst.b	d1
-		beq.s	scan_aga_aligned
-		move.w	#$00ff,d6
-		ror.w	d1,d6
-		move.w	d6,d4
-		lsr.w	#8,d4				;left edge keep mask.
-		move.b	(a3),d0
-		move.b	40(a3),d7
-		and.w	d4,d0
-		and.w	d4,d7
-		lsl.w	d1,d0
-		lsl.w	d1,d7
-
-; Each plane's word holds the previous and current tile bytes.
-; Shifting the pair finishes one output byte; retain the current tile for the next pair.
-scan_aga_solid:	move.w	d2,d5
-		add.b	(a0)+,d5
-		lsl.w	#4,d5
-		move.w	(a1,d5.w),d4
-		move.b	d4,d7
-		lsr.w	#8,d4
-		move.b	d4,d0
-		move.w	d7,d5
-		lsr.w	d1,d5
-		move.b	d5,40(a3)
-		move.w	d0,d4
-		lsr.w	d1,d4
-		move.b	d4,(a3)+
-		lsl.w	#8,d7
-		lsl.w	#8,d0
-		dbra	d3,scan_aga_solid
-
-; Merge the final spill into the right edge, preserving the rest of the background byte.
-		lsr.w	d1,d0
-		lsr.w	d1,d7
-		move.b	(a3),d4
-		and.b	d6,d4
-		or.b	d0,d4
-		move.b	d4,(a3)
-		move.b	40(a3),d5
-		and.b	d6,d5
-		or.b	d7,d5
-		move.b	d5,40(a3)
+		bra.w	win_span_spill
 scan_aga_wxt:	rts
-
-; With no shift, each tile replaces exactly one byte per plane.
-scan_aga_aligned:move.w	d2,d5
-		add.b	(a0)+,d5
-		lsl.w	#4,d5
-		move.w	(a1,d5.w),d4
-		move.b	d4,40(a3)
-		lsr.w	#8,d4
-		move.b	d4,(a3)+
-		dbra	d3,scan_aga_aligned
-		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		do the sprites

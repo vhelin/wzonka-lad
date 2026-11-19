@@ -22,7 +22,7 @@ I take no responsibility for anything.
 
 2. CHANGELOG
 
-v1.11.00 (17-Nov-2026):
+v1.11.00 (19-Nov-2026):
 
 * AGA Full packs background tiles in groups of four and simplifies
   scanline sprite selection and placement
@@ -41,8 +41,11 @@ v1.11.00 (17-Nov-2026):
 * OS Screen and Scalable Window share faster planar drawing. Full batches
   sprite clears, simplifies sprite selection, and writes each Game Boy
   window byte once per plane without spilling into the next row. x/153
-  copies background rows in pairs, skips clean sprite rows in groups of
-  four, and clears marked rows with batched stores
+  packs background tiles into aligned 32-bit writes, skips clean sprite
+  rows in groups of four, and clears marked rows with batched stores
+* AGA Full, OS Screen and Scalable Window pack aligned Game Boy window
+  pixels into 32-bit bitplane stores. OS Screen and Scalable Window x/153
+  now stream window rows, reading the destination only at shifted edges
 * Scalable Window uses lookup tables, wider copy loops and repeat-row
   reuse to reduce scaling work. Native-width output skips horizontal
   scaling; 320x144 and 320x288 have dedicated routines
@@ -77,6 +80,8 @@ v1.11.00 (17-Nov-2026):
 * Pulse-duty changes preserve the emulated CPU flags. Restarting audio
   resets sample caches and restores active note volumes from registers
 * Powering off sound also clears master routing, volume and internal pitch
+* FULL CPU mode writes stack pairs directly in high RAM and work RAM,
+  preserving echo RAM and using byte handlers at I/O and memory boundaries
 * Interrupt dispatch masks IF with IE before choosing the highest-priority
   request, including the EI and RETI paths
 * HALT resumes when an enabled interrupt becomes pending even with IME off,

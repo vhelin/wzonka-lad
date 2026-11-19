@@ -6225,21 +6225,7 @@ z80_optc_CBC4:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_C5:	subq.l	#4,a5
 		move.w	d1,d6
-
-		subq.w	#1,d5
-		move.l	d6,-(SP)
-		move.l	d5,d7
-		move.l	gb_mem_jumps,a6
-		lsr.w	#8,d6					;d1 = upper data (h.B).
-		jsr	([a6,d5.l*4])				;memory write.
-
-		move.l	(SP)+,d6
-		subq.w	#1,d5
-		move.l	gb_mem_jumps,a6
-		move.l	d5,d7
-		jsr	([a6,d5.l*4])				;memory write.
-
-		fetch_next_i
+		bra.l	write_d6_stack
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -6757,21 +6743,7 @@ z80_optc_CBD4:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_D5:	move.w	d0,d6
 		subq.l	#4,a5
-
-		subq.w	#1,d5
-		move.l	d6,-(SP)
-		lsr.w	#8,d6					;d6 = upper data (h.B).
-		move.l	gb_mem_jumps,a6
-		move.l	d5,d7
-		jsr	([a6,d5.l*4])				;memory write.
-
-		move.l	(SP)+,d6
-		subq.w	#1,d5
-		move.l	gb_mem_jumps,a6
-		move.l	d5,d7
-		jsr	([a6,d5.l*4])				;memory write.
-
-		fetch_next_i
+		bra.l	write_d6_stack
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -7241,21 +7213,7 @@ z80_optc_CBE4:	subq.l	#2,a5					;less cycles.
 
 z80_optcode_E5:	move.w	d2,d6
 		subq.l	#4,a5
-
-		subq.w	#1,d5
-		move.l	d6,-(SP)
-		lsr.w	#8,d6					;d6 = upper data (h.B).
-		move.l	gb_mem_jumps,a6
-		move.l	d5,d7
-		jsr	([a6,d5.l*4])				;memory write.
-
-		move.l	(SP)+,d6
-		subq.w	#1,d5
-		move.l	gb_mem_jumps,a6
-		move.l	d5,d7
-		jsr	([a6,d5.l*4])				;memory write.
-
-		fetch_next_i
+		bra.l	write_d6_stack
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

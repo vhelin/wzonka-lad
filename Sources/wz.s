@@ -684,6 +684,7 @@ back_pattern_crt_x_2:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		bsr.w	do_x_flip_t
+		bsr.l	spr_col_build
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		collect all the packer sub library names
@@ -12467,6 +12468,7 @@ cartridge_data:	dc.l	0
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 x_flip_table:	dc.l	0
+spr_col_table:	dc.l	0
 rom_32k:	dc.l	0
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -15989,6 +15991,7 @@ list_default_structure:
 		dc.l	gb_memory,$10000,MEMF_PUBLIC!MEMF_CLEAR
 		dc.l	memory_banks,131072+XPK_MARGIN+$2000,MEMF_PUBLIC
 		dc.l	x_flip_table,$10000*2,MEMF_PUBLIC
+		dc.l	spr_col_table,64*256*4,MEMF_PUBLIC
 		dc.l	snapshot_area,$2000*16+$8000+1024+XPK_MARGIN,MEMF_PUBLIC
 		dc.l	gb_mem_jumps,$10000*4,MEMF_PUBLIC
 

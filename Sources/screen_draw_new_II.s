@@ -19,6 +19,39 @@
 ;		start x = 0, start y = 0 (remember to add the scroll pixels!).
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+; D3.W holds the raw planes, A2 the live palette page. Each entry holds
+; [transparent, BG adder, p0, p1], with four bits per byte.
+spr_col_change:	MACRO
+		bfextu	d3{16:4},d4
+		lsl.w	#4,d4
+		bfextu	d3{24:4},d5
+		or.w	d5,d4
+		move.l	(a2,d4.w*4),d6
+		lsl.l	#4,d6
+		bfextu	d3{20:4},d4
+		lsl.w	#4,d4
+		bfextu	d3{28:4},d5
+		or.w	d5,d4
+		or.l	(a2,d4.w*4),d6
+		move.w	d6,d3
+		move.l	d6,d5
+		and.l	#$ff000000,d5
+		or.l	#$00ff0007,d5
+		clr.w	d6
+		rol.l	#8,d6
+		lsl.w	#8,d6
+		or.b	#$ff,d6
+		ENDM
+
+; D3 indexes OBP0/OBP1 relative to the pattern table at $8000.
+spr_col_page:	MACRO
+		move.b	$7f48(a1,d3.l),d3
+		and.w	#$fc,d3
+		lsl.w	#8,d3
+		move.l	spr_col_table,a2
+		lea	(a2,d3.l),a2
+		ENDM
+
 screen_draw:	tst.b	old_render			;aga?
 		beq.w	aga_screen_draw			;yes.
 
@@ -584,10 +617,8 @@ lines_done:	move.l	lcd_control,d1			;d1 = lcd control byte.
 
 		move.l	gb_memory,a0
 		move.l	a0,a1
-		move.l	a0,a2
 		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
 		add.l	#$8000,a1			;a1 = sprite pattern table.
-		add.l	#$ff48,a2			;a2 = obj0pal.B, obj1pal.B.
 		moveq.l	#40-1,d0			;d0 = number of sprites.
 
 		btst	#2,d1				;sprite size?
@@ -607,7 +638,6 @@ spr_n8x16:	move.l	#16-1,sprite_y
 ;		d0	= number of sprites.
 ;		a0	= sprite attribute table.
 ;		a1	= sprite pattern table.
-;		a2	= obj0pal.B, obj1pal.B.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 spr_c8xq:	move.l	-(a0),d1			;d1 = y.B, x.B, gfx.B, flags.B.
@@ -661,9 +691,7 @@ mark_loop:	move.l	#$01010101,(a6)+
 		move.b	d1,d3
 		and.b	#%10000,d3			;palette bit.
 		lsr.b	#4,d3				;take it down.
-		ror.l	#8,d1				;d1 = flags.B, x.B, y.B, gfx.B.
-		move.b	(a2,d3.l),d1			;d1 = flags.B, x.B, y.B, pal.B.
-		rol.l	#8,d1				;d1 = x.B, y.B, pal.B, flags.B.
+		spr_col_page
 
 		btst	#6,d1				;y flipped?
 		bne.w	spr_c8xq_flip			;yes.
@@ -675,10 +703,9 @@ mark_loop:	move.l	#$01010101,(a6)+
 ;		normal output
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		lsr.w	#8,d1				;d1 = pal.B.
 spr_c8xq_copy:	move.w	(a6)+,d3			;d3 = 01.
 		beq.w	next_I
-		bsr.w	spr_col_change			;real colours.
+		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -720,14 +747,12 @@ empty_sprite:	dbra	d0,spr_c8xq			;next sprite.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-spr_c8xq_copyx:	lsr.w	#8,d1				;d1 = pal.B.
-
-spr_c8xq_xopyx:	moveq.l	#0,d3
+spr_c8xq_copyx:	moveq.l	#0,d3
 		move.l	x_flip_table,a3
 		move.w	(a6)+,d3			;d3 = 01.
 		beq.s	next_II
 		move.w	(a3,d3.l*2),d3			;d3 = x flipped data.
-		bsr.w	spr_col_change			;real colours.
+		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -754,13 +779,13 @@ spr_c8xq_xopyx:	moveq.l	#0,d3
 		or.w	d6,(a5)
 		sub.l	#4224-(192/8),a5
 
-		dbra	d7,spr_c8xq_xopyx		;next y (register).
+		dbra	d7,spr_c8xq_copyx		;next y (register).
 		dbra	d0,spr_c8xq			;next sprite.
 		rts
 
 next_II:	add.l	#192/8,a4
 		add.l	#192/8,a5
-		dbra	d7,spr_c8xq_xopyx		;next y (register).
+		dbra	d7,spr_c8xq_copyx		;next y (register).
 		dbra	d0,spr_c8xq			;next sprite.
 		rts
 
@@ -777,10 +802,9 @@ spr_c8xq_flip:	move.l	d7,d4				;d4 = y-1.
 		btst	#5,d1				;x flipped?
 		bne.s	spr_c8xq_copyxy			;yes.
 
-		lsr.w	#8,d1				;d1 = pal.B.
 spr_c8xq_copyy:	move.w	-(a6),d3			;d3 = 01.
 		beq.s	next_III
-		bsr.w	spr_col_change			;real colours.
+		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -822,14 +846,12 @@ next_III:	add.l	#192/8,a4
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-spr_c8xq_copyxy:lsr.w	#8,d1				;d1 = pal.B.
-
-spr_c8xq_xopyxy:moveq.l	#0,d3
+spr_c8xq_copyxy:moveq.l	#0,d3
 		move.l	x_flip_table,a3
 		move.w	-(a6),d3			;d3 = 01.
 		beq.s	next_IIII
 		move.w	(a3,d3.l*2),d3			;d3 = x flipped data.
-		bsr.b	spr_col_change			;real colours.
+		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -856,98 +878,63 @@ spr_c8xq_xopyxy:moveq.l	#0,d3
 		or.w	d6,(a5)
 		sub.l	#4224-(192/8),a5
 
-		dbra	d7,spr_c8xq_xopyxy		;next y (register).
+		dbra	d7,spr_c8xq_copyxy		;next y (register).
 		dbra	d0,spr_c8xq			;next sprite.
 		rts
 
 next_IIII:	add.l	#192/8,a4
 		add.l	#192/8,a5
-		dbra	d7,spr_c8xq_xopyxy		;next y (register).
+		dbra	d7,spr_c8xq_copyxy		;next y (register).
 		dbra	d0,spr_c8xq			;next sprite.
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		change the sprite's colours to the real ones
-;		INPUT:
-;		d1	= palette entries .B.
-;			= xxyyzzcc,
-;			  xx = value for colour 3.
-;			  yy =                  2.
-;			  zz =                  1.
-;			  cc =                  0 (processing not required, because
-;						   this is the tranparent colour).
-;		d3	= .W data (p0.B, p1.B).
-;		d4	= available for mutation.
-;		d5	=			.
-;		d6	=			.
-;		OUTPUT:
-;		d3	= .W manipulated data (p0.B, p1.B).
-;		d5	= .W bg p0 and p1 mask, .W rubbish.
-;		d6	= .W bg p0 and p1 adder, .W mask.
+;		Build the immutable sprite palette table once at startup.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-spr_col_change:	move.l	d7,-(SP)
-		moveq.l	#0,d4
-		move.w	d3,d4
-		moveq.l	#0,d5
-		move.b	d4,d5
-		lsr.w	#8,d4
-		move.l	d4,d6
-		and.b	d5,d6				;source colour 3.
-		eor.b	d6,d4				;source colour 1.
-		eor.b	d6,d5				;source colour 2.
-
-;		Replicate each source mask into [zero, BG adder, p0, p1],
-;		then keep only the bytes selected by that colour's palette shade.
-		move.b	d4,d7
-		lsl.l	#8,d4
-		move.b	d7,d4
-		lsl.l	#8,d4
-		move.b	d7,d4
-		move.b	d1,d7
-		lsr.w	#2,d7
-		and.w	#3,d7
-		and.l	spr_col_shades(pc,d7.w*4),d4
-
-		move.b	d5,d7
-		lsl.l	#8,d5
-		move.b	d7,d5
-		lsl.l	#8,d5
-		move.b	d7,d5
-		move.b	d1,d7
+spr_col_build:	movem.l	d2-d7/a2,-(sp)
+		move.l	spr_col_table,a0
+		lea	spr_col_shades(pc),a1
+		moveq.l	#0,d0
+spr_col_pal:	moveq.l	#3,d5
+		and.w	d0,d5
+		move.l	(a1,d5.w*4),d5
+		move.w	d0,d6
+		lsr.w	#2,d6
+		and.w	#3,d6
+		move.l	(a1,d6.w*4),d6
+		move.w	d0,d7
 		lsr.w	#4,d7
-		and.w	#3,d7
-		and.l	spr_col_shades(pc,d7.w*4),d5
-
-		move.b	d6,d7
-		lsl.l	#8,d6
-		move.b	d7,d6
-		lsl.l	#8,d6
-		move.b	d7,d6
-		move.b	d1,d7
-		lsr.w	#6,d7
-		and.w	#3,d7
-		and.l	spr_col_shades(pc,d7.w*4),d6
-
-		or.l	d5,d4
-		or.l	d6,d4
-		moveq.l	#0,d7
-		move.w	d3,d7
-		lsr.w	#8,d7
-		or.b	d3,d7
-		eor.b	#$ff,d7				;transparent source pixels.
-		move.w	d4,d3
-		move.l	d4,d6
-		and.l	#$00ff0000,d6
-		lsl.l	#8,d6
-		move.w	d7,d6
-		ror.w	#8,d6
-		or.b	#$ff,d6
-		ror.l	#8,d7
-		move.l	#$00ff0007,d5
-		or.l	d7,d5
-		move.l	(SP)+,d7
+		move.l	(a1,d7.w*4),d7
+		moveq.l	#0,d1
+spr_col_entry:	bfextu	d1{24:4},d2
+		bfextu	d1{28:4},d3
+		move.l	d2,d4
+		or.l	d3,d4
+		eor.b	#$0f,d4
+		ror.l	#8,d4				;transparent bits in the high byte.
+		move.l	d2,a2
+		and.l	d3,d2				;source colour 3.
+		eor.l	d2,d3				;source colour 2.
+		mulu.l	#$010101,d3			;repeat the mask in three bytes.
+		and.l	d6,d3
+		or.l	d3,d4
+		move.l	a2,d3
+		eor.l	d2,d3				;source colour 1.
+		mulu.l	#$010101,d3
+		and.l	d5,d3
+		or.l	d3,d4
+		mulu.l	#$010101,d2
+		and.l	d7,d2
+		or.l	d2,d4
+		move.l	d4,(a0)+
+		addq.b	#1,d1
+		bne.s	spr_col_entry
+		addq.w	#1,d0
+		cmp.w	#64,d0
+		bne.w	spr_col_pal
+		movem.l	(sp)+,d2-d7/a2
 		rts
 
 		cnop	0,4

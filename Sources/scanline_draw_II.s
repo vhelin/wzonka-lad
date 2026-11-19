@@ -259,10 +259,8 @@ scan_draw_bgy:	rts					;exit background drawing.
 
 scan_sprites:	move.l	gb_memory,a0
 		move.l	a0,a1
-		move.l	a0,a2
 		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
 		add.l	#$8000,a1			;a1 = sprite pattern table.
-		add.l	#$ff48,a2			;a2 = obj0pal.B, obj1pal.B.
 		moveq.l	#40-1,d0			;d0 = number of sprites.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -327,7 +325,6 @@ sspr_picked:	tst.b	d2
 ;		d0	= number of sprites.
 ;		a0	= sprite attribute table.
 ;		a1	= sprite pattern table.
-;		a2	= obj0pal.B, obj1pal.B.
 ;		a3	= sprite output planes.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
@@ -371,16 +368,13 @@ spr_y_back:	lsl.b	#1,d6				;y = y * 2 (for data).
 		move.b	d1,d3
 		and.b	#%10000,d3			;palette bit.
 		lsr.b	#4,d3				;take it down.
-		ror.l	#8,d1				;d1 = flags.B, x.B, y.B, gfx.B.
-		move.b	(a2,d3.l),d1			;d1 = flags.B, x.B, y.B, pal.B.
-		rol.l	#8,d1				;d1 = x.B, y.B, pal.B, flags.B.
+		spr_col_page
 
 		btst	#5,d1				;x flipped?
 		bne.w	sspr_c8xq_copyx			;yes.
 
 spr_x_back:	move.l	a6,a4				;a4 = output spr (p0).
 		move.l	a3,a5				;a5 = output bg  (p0).
-		lsr.w	#8,d1				;d1 = x.B, y.B, 0.B, pal.B.
 		cmp.w	#8,d2				;x < 8?
 		blo.s	spr_less_8			;yes.
 		cmp.w	#8+160-8,d2			;152 < x < 160?
@@ -393,7 +387,7 @@ spr_x_back:	move.l	a6,a4				;a4 = output spr (p0).
 		add.l	d4,a5				;y and x fixed.
 
 		move.w	d7,d3
-		bsr.w	spr_col_change
+		spr_col_change
 
 		moveq.l	#0,d7
 		move.b	d3,d7				;d7 = 1.B.
@@ -428,7 +422,7 @@ next_spr:	dbra	d0,sspr_c8xq			;next sprite.
 exit_spr:	rts
 
 spr_less_8:	move.w	d7,d3
-		bsr.w	spr_col_change
+		spr_col_change
 
 		moveq.l	#8,d1
 		and.b	#%111,d2
@@ -469,7 +463,7 @@ spr_over_152:	add.l	#(160/8)-2,a4
 		add.l	#(160/8)-2,a5
 
 		move.w	d7,d3
-		bsr.w	spr_col_change
+		spr_col_change
 
 		and.b	#%111,d2
 		moveq.l	#0,d7

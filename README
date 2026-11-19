@@ -35,8 +35,9 @@ v1.11.00 (17-Nov-2026):
   allocated bitmap when the background or LCD is disabled
 * Both AGA refresh modes batch sprite-plane clears and merge sprite
   words in registers to reduce bitplane reads and writes
-* Non-AGA sprite drawing remaps palettes a row at a time instead of
-  branching on individual pixels
+* OS Screen and Scalable Window convert each nonempty sprite row with two
+  lookups in a 64 KiB table. Both refresh modes retain live sprite palettes,
+  transparency and background/sprite priority
 * OS Screen and Scalable Window share faster planar drawing. Full batches
   sprite clears, simplifies sprite selection, and writes each Game Boy
   window byte once per plane without spilling into the next row. x/153

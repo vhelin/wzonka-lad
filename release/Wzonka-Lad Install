@@ -1,4 +1,4 @@
-; $VER: Wzonka-Lad Installer Script 1.01.00 (14-Aug-99)
+; $VER: Wzonka-Lad Installer Script 1.11.00 (19-Nov-2026)
 ; Installer made by Lennart Johannesson
 ; Modified by Ville Helin
 ; For comments, bugs (yes, I know there's still a lot of them)
@@ -7,7 +7,7 @@
 
 ;Ask where to place the Wzonka-Lad directory
 
-(message "\nWelcome to Wzonka-Lad Installer!\n-----------------------\n\nThis program will install\n Wzonka-Lad 1.01.00\n on your Amiga\n\n Written by Ville Helin 1996-1999\nville.helin@gmail.com\n\n")
+(message "\nWelcome to Wzonka-Lad Installer!\n-----------------------\n\nThis program will install\n Wzonka-Lad 1.11.00\n on your Amiga\n\n Written by Ville Helin 1996-1999\nville.helin@gmail.com\n\n")
 
 (welcome)
 

@@ -1,15 +1,15 @@
 @database "Wzonka-Lad Guide"
 @master "Wzonka-Lad Guide"
-@$VER: Wzonka-Lad Guide 1.10.00 (19.11.2026)
+@$VER: Wzonka-Lad Guide 1.11.00 (19.11.2026)
 @author "Ville Helin"
 @(c) "Ville Helin 1996-1999"
 
-@node "main" "Wzonka-Lad v1.10.00 - The Game Boy Fan Software Test Platform"
+@node "main" "Wzonka-Lad v1.11.00 - The Game Boy Fan Software Test Platform"
 @toc "main"
 
           @{b}Before Starting...@{ub}
 
-          @{" ABOUT 1.10.00! READ ME!   " link "aboutw"}
+          @{" ABOUT 1.11.00! READ ME!   " link "aboutw"}
 
           @{" Requirements              " link "req"}  @{" Installing                " link "inst"}
           @{" Debugging                 " link "debug"}
@@ -77,7 +77,7 @@
 
 @endnode
 
-@node "aboutw" "About version 1.10.00"
+@node "aboutw" "About version 1.11.00"
 @toc "main"
 
   Wzonka-Lad emulates Game Boy (DMG), and is meant for the people who wish

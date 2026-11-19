@@ -1,6 +1,6 @@
 @database "Wzonka-Lad Guide"
 @master "Wzonka-Lad Guide"
-@$VER: Wzonka-Lad Guide 1.10.00 (16.11.2026)
+@$VER: Wzonka-Lad Guide 1.10.00 (19.11.2026)
 @author "Ville Helin"
 @(c) "Ville Helin 1996-1999"
 
@@ -676,6 +676,10 @@
 @node "things" "Things to do"
 @toc "main"
 
+  Come and find the latest sources and executables:
+
+  - https://github.com/vhelin/wzonka-lad
+
   Very imminent additions:
 
   - Fix all the bugs.
@@ -999,57 +1003,122 @@
 @node "history" "History"
 @toc "main"
 
+  v1.11.00 (19-Nov-2026):
+
+    * AGA Full packs background tiles in groups of four and simplifies
+      scanline sprite selection and placement
+    * AGA Full writes each Game Boy window byte once per bitplane.
+      Shifted windows read the background only at the two edges
+    * AGA x/153 copies background and Game Boy window data two rows at a
+      time, skips clean sprite rows in groups of four, and shares sprite
+      merging across all flip combinations
+    * AGA x/153 batches bulk background clears and stays within the
+      allocated bitmap when the background or LCD is disabled
+    * Both AGA refresh modes batch sprite-plane clears and merge sprite
+      words in registers to reduce bitplane reads and writes
+    * OS Screen and Scalable Window convert each nonempty sprite row with two
+      lookups in a 64 KiB table. Both refresh modes retain live sprite palettes,
+      transparency and background/sprite priority
+    * OS Screen and Scalable Window share faster planar drawing. Full batches
+      sprite clears, simplifies sprite selection, and writes each Game Boy
+      window byte once per plane without spilling into the next row. x/153
+      packs background tiles into aligned 32-bit writes, skips clean sprite
+      rows in groups of four, and clears marked rows with batched stores
+    * AGA Full, OS Screen and Scalable Window pack aligned Game Boy window
+      pixels into 32-bit bitplane stores. OS Screen and Scalable Window x/153
+      now stream window rows, reading the destination only at shifted edges
+    * Scalable Window uses lookup tables, wider copy loops and repeat-row
+      reuse to reduce scaling work. Native-width output skips horizontal
+      scaling; 320x144 and 320x288 have dedicated routines
+    * Misc settings includes optional Direct Window readback.
+    * Number keys 1-9 resize the active Scalable Window's width; Shift+1-9
+      sets its height
+    * An optional EClock build profiles Window and AGA drawing and writes
+      the results to T:Wzonka-GFX.txt on pause
+    * Native Screen modes such as Lowres use planar output even when
+      CyberGraphX is installed. OS screen speed limit also works on RTG screens
+    * Noise uses a shift-register pattern. The normal loop is 32767
+      steps and the short metallic mode is 127. The sample changes
+      only when that mode changes
+    * Wave samples use the whole 4-bit range, so a value of 15
+      reaches full scale
+    * Master-volume (NR50) writes no longer overwrite the volume with channel
+      routing (NR51), fixing music fade-out hangs
+    * All sound modes apply the separate left/right NR50 levels and correct
+      NR51 stereo routing. NR50 level zero is quiet, not completely muted
+    * Pulse and wave playback rates retain fractional-tone precision without
+      18-bit wrapping. Noise uses the correct LFSR clock rate; NR43 shifts 14
+      and 15 stop the noise clock
+    * Prevent Amiga lockups with AHI: pause ultrasonic playback rates >=
+      1048576 Hz that overflow its mixer. Game Boy sound registers,
+      channel status and timers are unaffected
+    * y Hz mode tracks triggers, DAC power, length timers and NR52 channel
+      status without making AHI calls between its selected output updates
+    * Sound-register writes cannot revive a channel stopped by its DAC,
+      length timer or sweep. Envelope writes no longer restart the envelope
+    * High mode checks sweep overflow on trigger without changing pitch early,
+      and checks overflow again after each frequency update
+    * Pulse-duty changes preserve the emulated CPU flags. Restarting audio
+      resets sample caches and restores active note volumes from registers
+    * Powering off sound also clears master routing, volume and internal pitch
+    * FULL CPU mode writes stack pairs directly in high RAM and work RAM,
+      preserving echo RAM and using byte handlers at I/O and memory boundaries
+    * Interrupt dispatch masks IF with IE before choosing the highest-priority
+      request, including the EI and RETI paths
+    * HALT resumes when an enabled interrupt becomes pending even with IME off,
+      without servicing that interrupt. STOP is left halted
+    * EI enables interrupts after the following instruction in all CPU modes.
+      DI cancels a pending EI, and the following instruction's cycles are
+      counted. EI/HALT and EI/RETI preserve the correct interrupt state
+    * The HALT bug's suppressed PC increment survives a CPU sweep boundary,
+      including debug builds
+    * ADD SP,x and LD HL,SP+x set C from the unsigned low-byte addition.
+      The full core also sets H from bit 3 and clears N and Z
+    * ADD HL,HL stores a literal H flag in the full core, rather than a
+      deferred flag based on stale operands
+    * CCF clears H and N in the full core while preserving Z and complementing C
+    * DAA handles every A/N/H/C input combination in the full core, preserves
+      N, clears H, and sets Z from the adjusted accumulator
+    * Corrected cycle counts in both cores for JR, JP, CALL, RET, RETI, RST
+      and BIT n,(HL), including taken and untaken conditional paths
+
   v1.10.00 (16-Nov-2026)
     * DAA sets Z from the adjusted accumulator
-    * ADD HL,BC / ADD HL,DE / ADD HL,SP set H from
-      the carry out of bit 11
+    * ADD HL,BC / ADD HL,DE / ADD HL,SP set H from the carry out of bit 11
     * CCF sets H from the old carry, then complements C
-    * HALT with interrupts disabled waits. The halt bug
-      runs only when an enabled interrupt is already
-      pending. A halted CPU resumes, without servicing
-      the interrupt, when one becomes pending while
-      interrupts stay disabled. STOP is left halted
-    * The crippled core has the same HALT fix. It does
-      not emulate DAA or the H flag. Its HALT debug
-      conditional is closed, matching the full core
-    * A missing startup library or key file is reported
-      on the console before exit
-    * DMG OAM corruption is assembled only when
-      GAMEBOY_OAM_BUG is 1. It defaults to 0, so
-      inc/dec and ld (hl+/-) do not alter other
-      OAM entries
-    * ADC and SBC set Z when the result byte is 0.
-      The carry path presets Z as well as X, because
-      ADDX and SUBX leave Z unchanged on zero. The
+    * HALT with interrupts disabled waits. The halt bug runs only when an
+      enabled interrupt is already pending. A halted CPU resumes, without
+      servicing the interrupt, when one becomes pending while interrupts
+	  stay disabled. STOP is left halted
+    * The crippled core has the same HALT fix. It does not emulate DAA or
+      the H flag. Its HALT debug conditional is closed, matching the full core
+    * A missing startup library or key file is reported on the console
+      before exit
+    * DMG OAM corruption is assembled only when GAMEBOY_OAM_BUG is 1. It
+      defaults to 0, so inc/dec and ld (hl+/-) do not alter other OAM entries
+    * ADC and SBC set Z when the result byte is 0. The carry path presets
+      Z as well as X, because ADDX and SUBX leave Z unchanged on zero. The
       crippled core has the same fix
-    * Line-by-line sprite drawing walks OAM from
-      sprite 0 and draws higher indices first, so
-      sprite 0 is in front. Every sprite on the line
-      is drawn
-    * Channel 1 sweep runs again. Its new frequency
-      is converted like a square write, and the
-      channel goes silent past 2047
-    * A wave high-byte write uses the same divider
-      as the low byte, so the note stays in tune
-    * Noise plays at the LFSR rate. Its envelope
-      arms the noise channel. A trigger with the
-      length bit set starts the note
+    * Line-by-line sprite drawing walks OAM from sprite 0 and draws higher
+      indices first, so sprite 0 is in front. Every sprite on the line is drawn
+    * Channel 1 sweep runs again. Its new frequency is converted like a
+      square write, and the channel goes silent past 2047
+    * A wave high-byte write uses the same divider as the low byte, so the
+      note stays in tune
+    * Noise plays at the LFSR rate. Its envelope arms the noise channel.
+      A trigger with the length bit set starts the note
     * A rising envelope stops at volume 15 and holds there
-    * Length counters clock at 256 Hz. Squares and
-      noise count 64 steps, the wave counts 256,
-      and the channel goes silent at zero
-    * NR52 bits 0-3 follow the running channels.
-      A trigger sets the bit when the DAC is on.
-      The bit clears when the length expires, the
-      DAC turns off, channel 1 sweep overflows,
-      or the APU powers off. Writing NR52 while
-      the APU is already on keeps those bits, so
-      a room change can silence what is playing
-    * Powering the APU off clears envelope and
-      sweep state, so the channel stays silent
+    * Length counters clock at 256 Hz. Squares and noise count 64 steps,
+      the wave counts 256, and the channel goes silent at zero
+    * NR52 bits 0-3 follow the running channels. A trigger sets the bit
+      when the DAC is on. The bit clears when the length expires, the
+      DAC turns off, channel 1 sweep overflows, or the APU powers off.
+      Writing NR52 while the APU is already on keeps those bits, so a room
+      change can silence what is playing
+    * Powering the APU off clears envelope and sweep state, so the channel
+      stays silent
     * Sprite drawing optimizations
-    * Window mode obeys now "OS screen speed
-      limit" setting)
+    * Window mode obeys now "OS screen speed limit" setting)
 
   v1.01.00 (14-Aug-1999)
     * Wzonka-Lad doesn't check the ID area in a ROM dump file,

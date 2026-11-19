@@ -20,7 +20,7 @@ further information. You use Wzonka-Lad at your own risk.
 I take no responsibility for anything.
 
 
-2. CHANGELOG
+2. CHANGELOG (RECENT)
 
 v1.11.00 (19-Nov-2026):
 
@@ -100,48 +100,3 @@ v1.11.00 (19-Nov-2026):
   N, clears H, and sets Z from the adjusted accumulator
 * Corrected cycle counts in both cores for JR, JP, CALL, RET, RETI, RST
   and BIT n,(HL), including taken and untaken conditional paths
-
-v1.10.00 (16-Nov-2026):
-
-* DAA sets Z from the adjusted accumulator
-* ADD HL,BC / ADD HL,DE / ADD HL,SP set H from the carry out of bit 11
-* CCF sets H from the old carry, then complements C
-* HALT with interrupts disabled waits. The halt bug runs only when an
-  enabled interrupt is already pending. A halted CPU resumes, without
-  servicing the interrupt, when one becomes pending while interrupts
-  stay disabled. STOP is left halted
-* The crippled core has the same HALT fix. It does not emulate DAA or
-  the H flag. Its HALT debug conditional is closed, matching the full core
-* A missing startup library or key file is reported on the console
-  before exit
-* DMG OAM corruption is assembled only when GAMEBOY_OAM_BUG is 1. It
-  defaults to 0, so inc/dec and ld (hl+/-) do not alter other OAM entries
-* ADC and SBC set Z when the result byte is 0. The carry path presets
-  Z as well as X, because ADDX and SUBX leave Z unchanged on zero. The
-  crippled core has the same fix
-* Line-by-line sprite drawing walks OAM from sprite 0 and draws higher
-  indices first, so sprite 0 is in front. Every sprite on the line
-  is drawn
-* Channel 1 sweep runs again. Its new frequency is converted like a
-  square write, and the channel goes silent past 2047
-* A wave high-byte write uses the same divider as the low byte, so
-  the note stays in tune
-* Noise plays at the LFSR rate. Its envelope arms the noise channel.
-  A trigger with the length bit set starts the note
-* A rising envelope stops at volume 15 and holds there
-* Length counters clock at 256 Hz. Squares and noise count 64 steps,
-  the wave counts 256, and the channel goes silent at zero
-* NR52 bits 0-3 follow the running channels. A trigger sets the bit
-  when the DAC is on. The bit clears when the length expires, the
-  DAC turns off, channel 1 sweep overflows, or the APU powers off.
-  Writing NR52 while the APU is already on keeps those bits, so
-  a room change can silence what is playing
-* Powering the APU off clears envelope and sweep state, so the
-  channel stays silent
-* Sprite drawing optimizations
-* Window mode obeys now "OS screen speed limit" setting)
-
-v1.02.00 (23-Dec-2003):
-
-* Added few missing files (the routines directory)
-* Initial GPL 2 release

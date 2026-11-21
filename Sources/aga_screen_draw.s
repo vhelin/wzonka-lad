@@ -66,11 +66,38 @@ wait_donen:	clr.l	lcd_control			;sprites off -> clear.
 							;background off -> clear.
 		bsr.w	screen_aga_clear_the_background
 		bsr.w	screen_aga_win
+		tst.b	old_refresh
+		beq.s	clear_aga_full_sprites
 		bsr.w	screen_aga_sprs
+		bra.s	clear_aga_present
+clear_aga_full_sprites:
+		bsr.w	clear_aga_scanline_sprites
+clear_aga_present:
 		bsr.w	update_aga_pal			;update the palette.
 		bsr.w	swap_aga_buffex			;swap the lists.
 
 		bsr.w	pull_z80
+		rts
+
+; Full starts at row 0, not at the x/153 sprite bitmap's 16-row margin.
+clear_aga_scanline_sprites:
+		move.l	aga_map_inactive,a0
+		lea	160(a0),a0
+		move.w	#144-1,d0
+		moveq.l	#0,d1
+		moveq.l	#0,d2
+		moveq.l	#0,d3
+		moveq.l	#0,d4
+		moveq.l	#0,d5
+		moveq.l	#0,d6
+		moveq.l	#0,d7
+clear_aga_scanline_row:
+		movem.l	d1-d7,(a0)
+		movem.l	d1-d7,40(a0)
+		movem.l	d1-d7,80(a0)
+		movem.l	d1-d7,120(a0)
+		lea	320(a0),a0
+		dbra	d0,clear_aga_scanline_row
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

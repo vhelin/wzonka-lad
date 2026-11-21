@@ -71,8 +71,8 @@ screen_draw:	tst.b	old_render			;aga?
 		bsr.w	screen_sprites			;do them!
 		gfx_time_end gfx_prof_planar
 		bsr.w	swap_lists_nor			;swap the sprite y lists.
-		bsr.w	screen_draw_pl			;all h/w effects are done!
 		bsr.w	update_bg_pal			;output the palette.
+		bsr.w	screen_draw_pl			;all h/w effects are done!
 
 		bsr.w	pull_z80
 
@@ -81,6 +81,16 @@ no_screen_draw:	rts					;exit.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		empty screen
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+screen_draw_blank:
+		tst.b	old_render
+		beq.w	clear_aga_screen
+		bsr.w	push_z80
+		bsr.w	screen_empty
+		bsr.w	update_bg_pal
+		bsr.w	screen_draw_pl
+		bsr.w	swap_lists_nor
+		bra.w	pull_z80
 
 screen_empty:	tst.b	old_render			;aga?
 		beq.s	aga_empty			;yes.
@@ -144,6 +154,10 @@ update_bg_pal:	tst.b	old_render			;window/screen?
 		add.l	#$ff47,a0			;bgrdpal (background palette).
 		moveq.l	#0,d0
 		move.b	(a0),d0				;d0 = palette byte.
+		tst.b	lcd_blank_phase
+		beq.s	update_bg_palette_ready
+		moveq.l	#0,d0
+update_bg_palette_ready:
 
 		cmp.b	#2,old_render
 		beq.w	window_colour_update

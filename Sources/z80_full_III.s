@@ -487,7 +487,7 @@ z80_optcode_06:	ror.w	#8,d1					;b down.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB06:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		rol.b	#1,d6
 		move.w	CCR,d4					;status updated.
 		move.w	d2,d7					;d7 = a (hl) - write.
@@ -619,7 +619,7 @@ z80_optcode_0A:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 		cnop	0,4
 
-read_d1_to_d3ax:move.b	(a2,d1.l),d3				;ram read.
+read_d1_to_d3ax:READ_RAM_BYTE d1,d3,0
 
 		fetch_next_i
 		cnop	0,128
@@ -755,7 +755,7 @@ z80_optcode_0E:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB0E:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		ror.b	#1,d6
 		move.w	CCR,d4					;status updated.
 		move.w	d2,d7					;d7 = a (hl) - write.
@@ -1016,7 +1016,7 @@ z80_optcode_16:	ror.w	#8,d0					;d down.
 
 z80_optc_CB16:	subq.l	#4,a5
 		lsl.b	#4,d4					;c = mc680x0's x!
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 
 		move.w	d4,CCR
 		roxl.b	#1,d6
@@ -1151,7 +1151,7 @@ z80_optcode_1A:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 		cnop	0,4
 
-read_d0x_to_d3a:move.b	(a2,d0.l),d3				;ram read.
+read_d0x_to_d3a:READ_RAM_BYTE d0,d3,0
 
 		fetch_next_i
 		cnop	0,128
@@ -1300,7 +1300,7 @@ z80_optcode_1E:	subq.l	#2,a5					;less cycles.
 
 z80_optc_CB1E:	subq.l	#4,a5
 		lsl.b	#4,d4					;c = mc680x0's x!
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 
 		move.w	d4,CCR
 		roxr.b	#1,d6
@@ -1578,7 +1578,7 @@ z80_optcode_26:	ror.w	#8,d2					;h down
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB26:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		asl.b	#1,d6
 		move.w	CCR,d4					;status updated.
 		move.w	d2,d7					;d7 = a (hl) - write.
@@ -1699,7 +1699,7 @@ z80_optcode_2A:	subq.l	#2,a5					;less cycles.
 		bra.s	z80_optcode_2A_got
 
 		cnop	0,4
-read_d2_to_d3a1:move.b	(a2,d2.l),d3				;ram read.
+read_d2_to_d3a1:READ_RAM_BYTE d2,d3,0
 z80_optcode_2A_got:
 		IFNE	GAMEBOY_OAM_BUG
 		cmp.l	#$FE00,d2
@@ -1846,15 +1846,14 @@ z80_optcode_2E:	subq.l	#2,a5					;less cycles.
 ;		CB2E - SRA (HL) - [n = 0, h = 0, c = x, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB2E:	
-		READ_D2_TO_D6
+z80_optc_CB2E:	subq.l	#4,a5
+		READ_D2_TO_D6 1
 
 		move.w	d2,d7
 		asr.b	#1,d6
 		move.w	CCR,d4					;status updated.
 
 		move.l	gb_mem_jumps,a6
-		subq.l	#4,a5
 		jsr	([a6,d2.l*4])				;memory write.
 
 		clr.l	h_other_I				;h = 0! no carry!
@@ -2023,8 +2022,8 @@ z80_optc_CB33:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_34:	move.l	#$00010002,h_other_I
-		READ_D2_TO_D6
 		subq.l	#3,a5
+		READ_D2_TO_D6 1
 		move.b	d6,h_other_I
 		and.b	#%1,d4					;save carry.
 
@@ -2062,8 +2061,8 @@ z80_optc_CB34:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_35:	move.l	#$00010002,h_other_I
-		READ_D2_TO_D6
 		subq.l	#3,a5
+		READ_D2_TO_D6 1
 		move.b	d6,h_other_I
 		and.b	#%1,d4					;save carry.
 
@@ -2111,9 +2110,8 @@ z80_optcode_36:	move.b	(a0)+,d6
 ;		CB36 - SWAP (HL) - [n = 0, h = 0, c = 0, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optc_CB36:
-		READ_D2_TO_D6
-		subq.l	#4,a5
+z80_optc_CB36:	subq.l	#4,a5
+		READ_D2_TO_D6 1
 		ror.b	#4,d6					;swap nibbles.
 		move.w	CCR,d4
 		move.w	d2,d7					;d7 = a (hl) - write.
@@ -2241,7 +2239,7 @@ z80_optcode_3A:	subq.l	#2,a5					;less cycles.
 		bra.s	z80_optcode_3A_got
 
 		cnop	0,4
-read_d2_to_d3a2:move.b	(a2,d2.l),d3				;ram read.
+read_d2_to_d3a2:READ_RAM_BYTE d2,d3,0
 z80_optcode_3A_got:
 		IFNE	GAMEBOY_OAM_BUG
 		cmp.l	#$FE00,d2
@@ -2379,7 +2377,7 @@ z80_optcode_3E:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB3E:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		lsr.b	#1,d6
 		move.w	CCR,d4					;status updated.
 		move.w	d2,d7					;d7 = a (hl) - write.
@@ -2594,7 +2592,7 @@ z80_optcode_46:	ror.w	#8,d1
 		fetch_next_i
 		cnop	0,4
 
-aread_d2_to_d1a:move.b	(a2,d2.l),d1				;ram read.
+aread_d2_to_d1a:READ_RAM_BYTE d2,d1,0
 		rol.w	#8,d1
 
 		fetch_next_i
@@ -2618,8 +2616,9 @@ z80_optc_CB46:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2a_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#0,(a2,d2.l)				;ram read.
+read_d2a_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#0,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -2820,7 +2819,7 @@ z80_optcode_4E:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 		cnop	0,4
 
-bread_d2_to_d1a:move.b	(a2,d2.l),d1				;ram read.
+bread_d2_to_d1a:READ_RAM_BYTE d2,d1,0
 
 		fetch_next_i
 		cnop	0,128
@@ -2843,8 +2842,9 @@ z80_optc_CB4E:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2b_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#1,(a2,d2.l)				;ram read.
+read_d2b_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#1,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -3049,7 +3049,7 @@ z80_optcode_56:	ror.w	#8,d0					;d down.
 		fetch_next_i
 		cnop	0,4
 
-cread_d2_to_d0a:move.b	(a2,d2.l),d0				;ram read.
+cread_d2_to_d0a:READ_RAM_BYTE d2,d0,0
 		rol.w	#8,d0					;d back to up.
 
 		fetch_next_i
@@ -3073,8 +3073,9 @@ z80_optc_CB56:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2c_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#2,(a2,d2.l)				;ram read.
+read_d2c_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#2,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -3275,7 +3276,7 @@ z80_optcode_5E:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 		cnop	0,4
 
-dread_d2_to_d0a:move.b	(a2,d2.l),d0				;ram read.
+dread_d2_to_d0a:READ_RAM_BYTE d2,d0,0
 
 		fetch_next_i
 		cnop	0,128
@@ -3298,8 +3299,9 @@ z80_optc_CB5E:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2d_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#3,(a2,d2.l)				;ram read.
+read_d2d_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#3,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -3505,7 +3507,7 @@ z80_optcode_66:	move.w	d2,d7					;d7 = h.B, l.B.
 		fetch_next_i
 		cnop	0,4
 
-read_d7_to_d2a:	move.b	(a2,d7.l),d2				;ram read.
+read_d7_to_d2a:	READ_RAM_BYTE d7,d2,0
 		rol.w	#8,d2					;h back to up.
 
 		fetch_next_i
@@ -3529,8 +3531,9 @@ z80_optc_CB66:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2e_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#4,(a2,d2.l)				;ram read.
+read_d2e_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#4,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -3731,7 +3734,7 @@ z80_optcode_6E:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 		cnop	0,4
 
-read_d2_to_d2a:	move.b	(a2,d2.l),d2				;ram read.
+read_d2_to_d2a:	READ_RAM_BYTE d2,d2,0
 
 		fetch_next_i
 		cnop	0,128
@@ -3754,8 +3757,9 @@ z80_optc_CB6E:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2f_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#5,(a2,d2.l)				;ram read.
+read_d2f_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#5,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -3965,6 +3969,9 @@ z80_optcode_76:	subq.l	#1,a5
 		tst.b	i_flag
 		beq.s	z80_optcode_76_halt			;ime on: wait.
 
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		ENDIF
 		move.l	a2,a6
 		add.l	#$ff00,a6
 		move.b	$0f(a6),d7				;if.
@@ -4011,8 +4018,9 @@ z80_optc_CB76:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2g_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#6,(a2,d2.l)				;ram read.
+read_d2g_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#6,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -4216,7 +4224,7 @@ z80_optcode_7E:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 		cnop	0,4
 
-read_d2_to_d3a3:move.b	(a2,d2.l),d3				;ram read.
+read_d2_to_d3a3:READ_RAM_BYTE d2,d3,0
 
 		fetch_next_i
 		cnop	0,128
@@ -4239,8 +4247,9 @@ z80_optc_CB7E:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-read_d2h_to_d7a:move.w	d4,CCR					;the status register.
-		btst.b	#7,(a2,d2.l)				;ram read.
+read_d2h_to_d7a:READ_RAM_BYTE d2,d6,0
+		move.w	d4,CCR
+		btst	#7,d6
 		move.w	CCR,d4					;status updated.
 
 		fetch_next_i
@@ -4436,11 +4445,10 @@ z80_optc_CB85:	subq.l	#2,a5					;less cycles.
 ;		86 - ADD (HL) - [n = 0, h = x, c = x, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_86:	
-		READ_D2_TO_D6
+z80_optcode_86:	subq.l	#2,a5
+		READ_D2_TO_D6 0
 
 		move.b	d3,h_other_I
-		subq.l	#2,a5					;less cycles.
 		move.b	d6,h_other_II
 
 		add.b	d6,d3					;a = a + (hl).
@@ -4457,7 +4465,7 @@ z80_optcode_86:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB86:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%11111110,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -4686,10 +4694,10 @@ z80_optc_CB8D:	subq.l	#2,a5					;less cycles.
 z80_optcode_8E:	btst	#0,d4					;carry?
 		beq.w	z80_optcode_86				;normal add.
 
-		READ_D2_TO_D6
+		subq.l	#2,a5
+		READ_D2_TO_D6 0
 
 		move.b	d3,h_other_I
-		subq.l	#2,a5					;less cycles.
 		move.b	d6,h_other_II
 
 		move.w	#%10100,CCR				;x = 1!
@@ -4707,7 +4715,7 @@ z80_optcode_8E:	btst	#0,d4					;carry?
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB8E:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%11111101,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -4913,11 +4921,10 @@ z80_optc_CB95:	subq.l	#2,a5					;less cycles.
 ;		96 - SUB (HL) - [n = 1, h = x, c = x, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_96:
-		READ_D2_TO_D6
+z80_optcode_96:	subq.l	#2,a5
+		READ_D2_TO_D6 0
 
 		move.b	d3,h_other_I
-		subq.l	#2,a5
 		or.w	#$100,d3				;n = 1!
 		move.b	d6,h_other_II
 
@@ -4934,7 +4941,7 @@ z80_optcode_96:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB96:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%11111011,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -5163,10 +5170,10 @@ z80_optc_CB9D:	subq.l	#2,a5					;less cycles.
 z80_optcode_9E:	btst	#0,d4					;c = 0?
 		beq.w	z80_optcode_96				;yes. normal sub.
 
-		READ_D2_TO_D6
+		subq.l	#2,a5
+		READ_D2_TO_D6 0
 
 		move.b	d3,h_other_I
-		subq.l	#2,a5					;less cycles.
 		move.b	d6,h_other_II
 
 		move.w	#%10100,CCR				;x = 1!
@@ -5184,7 +5191,7 @@ z80_optcode_9E:	btst	#0,d4					;c = 0?
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CB9E:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%11110111,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -5373,9 +5380,8 @@ z80_optc_CBA5:	subq.l	#2,a5					;less cycles.
 ;		A6 - AND (HL) - [n = 0, h = 1, c = 0, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_A6:
-		READ_D2_TO_D6
-		subq.l	#2,a5					;less cycles.
+z80_optcode_A6:	subq.l	#2,a5
+		READ_D2_TO_D6 0
 		and.b	d6,d3
 		move.w	CCR,d4					;status updated.
 
@@ -5390,7 +5396,7 @@ z80_optcode_A6:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CBA6:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%11101111,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -5572,9 +5578,8 @@ z80_optc_CBAD:	subq.l	#2,a5					;less cycles.
 ;		AE - XOR (HL) - [n = 0, h = 0, c = 0, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_AE:
-		READ_D2_TO_D6
-		subq.l	#2,a5					;less cycles.
+z80_optcode_AE:	subq.l	#2,a5
+		READ_D2_TO_D6 0
 		eor.b	d6,d3
 		move.w	CCR,d4					;status updated.
 
@@ -5589,7 +5594,7 @@ z80_optcode_AE:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CBAE:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%11011111,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -5771,9 +5776,8 @@ z80_optc_CBB5:	subq.l	#2,a5					;less cycles.
 ;		B6 - OR (HL) - [n = 0, h = 0, c = 0, z = x]
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_B6:
-		READ_D2_TO_D6
-		subq.l	#2,a5
+z80_optcode_B6:	subq.l	#2,a5
+		READ_D2_TO_D6 0
 		or.b	d6,d3
 		move.w	CCR,d4					;status updated.
 
@@ -5788,7 +5792,7 @@ z80_optcode_B6:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CBB6:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%10111111,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -5988,9 +5992,9 @@ z80_optc_CBBD:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_BE:	move.b	d3,h_other_I
-		READ_D2_TO_D6
-		move.b	d6,h_other_II
 		subq.l	#2,a5
+		READ_D2_TO_D6 0
+		move.b	d6,h_other_II
 
 		cmp.b	d6,d3
 		move.w	CCR,d4					;status updated.
@@ -6006,7 +6010,7 @@ z80_optcode_BE:	move.b	d3,h_other_I
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optc_CBBE:	subq.l	#4,a5
-		READ_D2_TO_D6
+		READ_D2_TO_D6 1
 		and.b	#%01111111,d6
 		move.w	d2,d7					;d7 = a (hl) - write.
 
@@ -6052,7 +6056,7 @@ z80_optcode_C0:	subq.l	#2,a5
 		bne.s	z80_cpu_loop_c0				;yes. it's zero.
 		subq.l	#3,a5				;return taken.
 
-		READW_D5_TO_D7
+		READW_D5_TO_D7 2
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xi
@@ -6093,7 +6097,7 @@ z80_optcode_C1:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-readw_d5_to_d1a:move.w	(a2,d5.l),d1				;ram read.
+readw_d5_to_d1a:READ_RAM_STACK d1,1
 		addq.w	#2,d5					;sp = sp + 2.
 		ror.w	#8,d1					;order correction.
 
@@ -6272,7 +6276,7 @@ z80_optc_CBC6:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-pead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram.
+pead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%1,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -6313,7 +6317,7 @@ z80_optcode_C8:	subq.l	#2,a5
 		beq.s	z80_cpu_loop_c8				;nope. it's non-zero.
 		subq.l	#3,a5				;return taken.
 
-		READW_D5_TO_D7
+		READW_D5_TO_D7 2
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xii
@@ -6343,9 +6347,8 @@ z80_optc_CBC8:	subq.l	#2,a5					;less cycles.
 ;		C9 - RET
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_C9:
-		READW_D5_TO_D7
-		subq.l	#4,a5					;less cycles.
+z80_optcode_C9:	subq.l	#4,a5					;less cycles.
+		READW_D5_TO_D7 2
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xvi
@@ -6542,7 +6545,7 @@ z80_optc_CBCE:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-lead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram.
+lead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%10,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -6583,7 +6586,7 @@ z80_optcode_D0:	subq.l	#2,a5
 		bne.s	z80_cpu_loop_d0				;yes. no jump.
 		subq.l	#3,a5				;return taken.
 
-		READW_D5_TO_D7
+		READW_D5_TO_D7 2
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xiii
@@ -6624,7 +6627,7 @@ z80_optcode_D1:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-readw_d5_to_d0a:move.w	(a2,d5.l),d0				;ram read.
+readw_d5_to_d0a:READ_RAM_STACK d0,1
 		addq.w	#2,d5					;sp = sp + 2.
 		ror.w	#8,d0					;order correction.
 
@@ -6791,7 +6794,7 @@ z80_optc_CBD6:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-aead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram.
+aead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%100,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -6832,7 +6835,7 @@ z80_optcode_D8:	subq.l	#2,a5
 		beq.s	z80_cpu_loop_d8				;no. no return.
 		subq.l	#3,a5				;return taken.
 
-		READW_D5_TO_D7
+		READW_D5_TO_D7 2
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xiv
@@ -6865,7 +6868,7 @@ z80_optc_CBD8:	subq.l	#2,a5					;less cycles.
 z80_optcode_D9:	subq.l	#4,a5					;less cycles.
 		clr.b	i_flag					;enable interrupts.
 
-		READW_D5_TO_D7
+		READW_D5_TO_D7 2
 		addq.w	#2,d5
 		ror.w	#8,d7
 		blt.s	pc_in_ram_xv
@@ -7042,7 +7045,7 @@ z80_optc_CBDE:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-qead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram read.
+qead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%1000,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -7112,7 +7115,7 @@ z80_optcode_E1:	subq.l	#3,a5
 		fetch_next_i
 		cnop	0,4
 
-readw_d5_to_d2a:move.w	(a2,d5.l),d2				;ram read.
+readw_d5_to_d2a:READ_RAM_STACK d2,1
 		ror.w	#8,d2					;order correction.
 		addq.w	#2,d5					;sp = sp + 2.
 
@@ -7157,7 +7160,7 @@ z80_optc_CBE2:	subq.l	#2,a5					;less cycles.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_optcode_E3:
-		READW_D5_TO_D7
+		READW_D5_TO_D7 2
 
 		move.l	d7,-(SP)
 		move.w	d5,d7					;d7 = stack address.
@@ -7258,7 +7261,7 @@ z80_optc_CBE6:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-wead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram read.
+wead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%10000,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -7444,7 +7447,7 @@ z80_optc_CBEE:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-fead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram read.
+fead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%100000,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -7482,7 +7485,7 @@ z80_optc_CBEF:	subq.l	#2,a5					;less cycles.
 z80_optcode_F0:	move.w	#$ff00,d7				;custom registers.
 		subq.l	#3,a5
 		move.b	(a0)+,d7
-		move.b	(a2,d7.l),d3				;ld a, ($ff00+x).
+		READ_RAM_BYTE d7,d3,0				;ld a, ($ff00+x).
 
 		fetch_next_i
 		cnop	0,128
@@ -7500,9 +7503,8 @@ z80_optc_CBF0:	subq.l	#2,a5					;less cycles.
 ;		F1 - POP AF
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-z80_optcode_F1:
-		READW_D5_TO_D7
-		subq.l	#3,a5
+z80_optcode_F1:	subq.l	#3,a5
+		READW_D5_TO_D7 1
 		move.b	d7,d3					;a returned.
 		addq.w	#2,d5
 
@@ -7543,7 +7545,7 @@ z80_optc_CBF1:	subq.l	#2,a5					;less cycles.
 z80_optcode_F2:	move.w	#$ff00,d7				;custom registers.
 		subq.l	#2,a5					;less cycles.
 		move.b	d1,d7					;offset.
-		move.b	(a2,d7.l),d3				;ld a, ($ff00+c).
+		READ_RAM_BYTE d7,d3,0				;ld a, ($ff00+c).
 
 		fetch_next_i
 		cnop	0,128
@@ -7670,7 +7672,7 @@ z80_optc_CBF6:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-tead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram read.
+tead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%1000000,d6
 		jsr	([a6,d2.l*4])				;memory write.
 
@@ -7753,7 +7755,7 @@ z80_optcode_FA:	move.w	(a0)+,d7
 		fetch_next_i
 		cnop	0,4
 
-read_d7_to_d3a:	move.b	(a2,d7.l),d3				;ram read.
+read_d7_to_d3a:	READ_RAM_BYTE d7,d3,0
 
 		fetch_next_i
 		cnop	0,128
@@ -7861,7 +7863,7 @@ z80_optc_CBFE:	subq.l	#4,a5
 		fetch_next_i
 		cnop	0,4
 
-uead_d2_to_d6a:	move.b	(a2,d2.l),d6				;ram read.
+uead_d2_to_d6a:	READ_RAM_BYTE d2,d6,1
 		or.b	#%10000000,d6
 		jsr	([a6,d2.l*4])				;memory write.
 

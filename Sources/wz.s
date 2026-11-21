@@ -2747,6 +2747,7 @@ vbr_obtained:	move.l	vbr_pointer,a0			;from memory with love.
 no_aga_init:	move.l	aga_sprs_cxII,aga_sprs_inactive_x
 		move.l	aga_sprs_cII,aga_sprs_inactive	;this one is universally
 							;used.
+		clr.b	lcd_blank_presented
 		move.l	exec_base,a6
 		jsr	CacheClearU(a6)			;clear the cache first.
 
@@ -3731,6 +3732,15 @@ pc_accuired:	moveq.l	#0,d1
 		move.w	#($10000-$8000)/4-1,d0
 mem_rest_I:	move.l	(a0)+,(a1)+
 		dbra	d0,mem_rest_I
+		tst.b	$ff40-$10000(a1)
+		spl	lcd_blank_phase		;legacy snapshots do not store LCD warm-up.
+		clr.b	lcd_blank_presented
+		bsr.w	dmg_unmapped_io
+		bsr.w	dmg_mirror_wram
+		bsr.w	sound_import_regs
+		IFEQ	Z80_MODE
+		bsr.l	sound_div_rebase
+		ENDIF
 
 		move.l	(a0)+,d0			;restore the banks, too?
 		beq.s	no_banks_rest			;no.
@@ -3871,6 +3881,16 @@ gbs_save_encode:move.l	key_file,d0
 		move.w	#($10000-$8000)/4-1,d0
 mem_copy_I:	move.l	(a1)+,(a0)+
 		dbra	d0,mem_copy_I
+
+; Preserve the raw sound registers in the existing snapshot format.
+		move.l	a0,-(SP)
+		lea	$ff10-$10000(a0),a0
+		lea	sound_raw_regs,a1
+		moveq.l	#$26-$10-1,d0
+mem_copy_sound:
+		move.b	(a1)+,(a0)+
+		dbra	d0,mem_copy_sound
+		move.l	(SP)+,a0
 
 		tst.l	ram_banks			;save the banks, too?
 		beq.s	no_banks_save			;no.
@@ -7551,6 +7571,7 @@ ahi_no_msg_port:rts
 turn_ahi_on:
 		IFEQ	GAMEBOY_USERS
 
+		clr.l	ahi_audio_ctrl
 		tst.b	snd_master
 		bne.w	ahi_on_quit
 
@@ -7587,17 +7608,27 @@ turn_ahi_on:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 init_the_sound_registers:
+		move.l	gb_memory,a2
+		move.l	gb_mem_jumps,a6
+		move.l	#$ff26,d7
+		move.b	(a2,d7.l),d6
+		bmi.s	normal_inits_powered
+		jsr	([a6,d7.l*4])			;restore NR52 only; replay would overwrite DMG lengths.
+		bra.w	normal_inits_wave
+
+normal_inits_powered:
 		clr.b	sound_I_onf_master
 		clr.b	sound_II_onf_master
 		clr.b	sound_III_onf_master
 		clr.b	sound_IV_onf_master
-		move.l	gb_mem_jumps,a6
-		move.l	gb_memory,a2
-		move.l	#$ff26,d7
-		move.w	#$26-$10,d5
+		subq.w	#1,d7
+		move.w	#$25-$10,d5
 
 normal_inits_loop_1:
-		move.b	(a2,d7.l),d6
+; Keep the forward label unmodified so PhxAss resolves it correctly.
+		lea	sound_raw_regs,a0
+		sub.l	#$ff10,a0
+		move.b	(a0,d7.l),d6
 		movem.l	d5/d7/a6,-(SP)
 
 		jsr	([a6,d7.l*4])
@@ -7609,10 +7640,12 @@ normal_inits_loop_1:
 		move.l	gb_mem_jumps,a6
 		move.l	gb_memory,a2
 		move.l	#$ff10,d7
-		move.w	#$26-$10,d5
+		move.w	#$25-$10,d5
 
 normal_inits_loop_2:
-		move.b	(a2,d7.l),d6
+		lea	sound_raw_regs,a0
+		sub.l	#$ff10,a0
+		move.b	(a0,d7.l),d6
 		movem.l	d5/d7/a6,-(SP)
 
 		jsr	([a6,d7.l*4])
@@ -7621,6 +7654,7 @@ normal_inits_loop_2:
 		addq.w	#1,d7
 		dbra	d5,normal_inits_loop_2
 
+normal_inits_wave:
 		move.l	gb_mem_jumps,a6
 		move.l	gb_memory,a2
 		move.l	#$ff30,d7
@@ -7781,15 +7815,12 @@ init_no_4:	lea	ahi_ctrl_tags_I,a1
 turn_ahi_off:
 		IFEQ	GAMEBOY_USERS
 
-		tst.b	snd_master
-		bne.s	ahi_off_xit
-
-		move.l	ahi_base,d0
+		move.l	ahi_audio_ctrl,d0
 		beq.s	ahi_off_xit
-		move.l	d0,a6
-
-		move.l	ahi_audio_ctrl,a2
+		move.l	d0,a2
+		move.l	ahi_base,a6
 		jsr	AHI_FreeAudio(a6)
+		clr.l	ahi_audio_ctrl
 
 		move.b	old_led,d1
 		and.b	#%10,d1
@@ -8941,22 +8972,27 @@ copy_ram_banks_x:
 		move.l	(a0)+,(a1)+
 		dbra	d0,copy_ram_banks_x
 
-ram_banks_done:	move.l	cartridge,a1			;a0 = $c000.
-		add.l	#$100,a1
-		move.w	#$2000/4-1,d0
-randomize_ram_1:move.l	(a1)+,(a0)+
-		dbra	d0,randomize_ram_1
-
-		move.w	#($fe00-$e000)/4-1,d0		;a0 = $e000.
-randomize_ram_2:move.l	(a1)+,(a0)+
-		dbra	d0,randomize_ram_2
-
 		move.l	gb_memory,a0
-		add.l	#$ff4c,a0
-		moveq.l	#$34-1,d0
-clear_misc_registers:
-		clr.b	(a0)+
-		dbra	d0,clear_misc_registers
+		add.l	#$c000,a0
+		move.w	#$2000/4-1,d0
+		move.l	#$51347394,d1
+		moveq.l	#13,d2
+		moveq.l	#17,d3
+; Use a reproducible power-on pattern even for an all-zero cartridge.
+dmg_boot_wram:	move.l	d1,d4
+		lsl.l	d2,d4
+		eor.l	d4,d1
+		move.l	d1,d4
+		lsr.l	d3,d4
+		eor.l	d4,d1
+		move.l	d1,d4
+		lsl.l	#5,d4
+		eor.l	d4,d1
+		move.l	d1,(a0)+
+		dbra	d0,dmg_boot_wram
+
+		bsr.w	dmg_mirror_wram
+		bsr.w	dmg_boot_vram
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		move on with the inits
@@ -8966,8 +9002,7 @@ clear_misc_registers:
 
 		move.b	#$cf,buttons_byte
 		move.b	#$cf,directions_byte
-		move.b	#$cf,buttons_byte_o
-		move.b	#$cf,directions_byte_o
+		move.b	#1,input_poll_lines
 
 		clr.b	transfer_counter
 
@@ -8978,6 +9013,11 @@ clear_misc_registers:
 		jsr	CacheClearU(a6)			;any help?
 
 		bsr.w	z80_start			;do the inits.
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bsr.w	dmg_boot_lcd_tail
+		ENDIF
+		ENDIF
 		bsr.w	push_z80			;push all the registers.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -9052,29 +9092,30 @@ cmp_up:
 ;		0/4
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		move.l	gb_scanlines,d7
-		cmp.b	#40,d7
-		beq.s	input_time
-		cmp.b	#80,d7
-		beq.s	input_time
+; Use a cadence coprime to 154 so polls aren't locked to the same LY values.
+input_poll_scanline:
+		subq.b	#1,input_poll_lines
+		bne.s	no_input_this_time
 		IFLE	Z80_MODE
-		cmp.b	#120,d7
-		beq.s	input_time
+		move.b	#53,input_poll_lines		;about three polls per frame.
+		ELSE
+		move.b	#79,input_poll_lines		;about two polls per frame.
 		ENDIF
-		bra.s	no_input_this_time
 
-input_time:	movem.l	d0-d6/a0-a6,-(SP)
+		movem.l	d0-d6/a0-a6,-(SP)
 		bsr.w	inputs_read			;do the joystick input.
 		movem.l	(SP)+,d0-d6/a0-a6
 		bsr.w	input_irq
 
 no_input_this_time:
 		IFLE	Z80_MODE
+		IFNE	Z80_MODE-GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.s	no_timer_update_0		;0! no update.
 		bsr.w	irq_timer
 no_timer_update_0:
+		ENDIF
 		ENDIF
 
 		and.b	#%11111100,$41(a6)
@@ -9108,6 +9149,7 @@ no_lcd_irq_emulation_0:
 vbr_blank:	btst.b	#7,$40(a6)			;lcd operation?
 		beq.s	no_vbr_blank			;no. quit.
 
+		bsr.w	lcd_blank_vblank
 		btst.b	#0,$ff(a6)			;vbr irq?
 		beq.s	no_vbr_blank			;no. quit.
 
@@ -9149,15 +9191,7 @@ dehalting_z80_0:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_0
 
-no_interrupts_0:tst.b	z80_halt
-		bne.w	cpu_halt_is_on_0
-
-		bsr.w	z80_cpu_next_sweep
-
-ei_loop_0:	tst.b	z80_ei_return
-		beq.s	no_ei_return_0
-		bsr.l	finish_ei
-		bra.s	ei_loop_0
+no_interrupts_0:bsr.l	z80_run_slice
 
 no_ei_return_0:
 		IFGT	GAMEBOY_DEBUG
@@ -9174,11 +9208,13 @@ cpu_halt_is_on_0:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
+		IFNE	Z80_MODE-GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_1		;0! no update.
 		bsr.w	irq_timer
 no_timer_update_1:
+		ENDIF
 		ENDIF
 
 		cmp.l	#$99,gb_scanlines
@@ -9235,7 +9271,14 @@ quit_gb_io:	move.l	io_buffer_in,a0
 no_transfer_reset:
 		clr.b	transfer_counter
 
-no_transfer:	add.b	#1,$04(a6)			;DIVIDER register.
+no_transfer:
+		IFNE	Z80_MODE
+		add.b	#1,$04(a6)			;legacy divider.
+		ELSE
+		IFNE	GAMEBOY_USERS
+		add.b	#1,$04(a6)
+		ENDIF
+		ENDIF
 		and.b	#%11111100,$41(a6)
 
 		move.l	h_values_indexed,a5
@@ -9286,15 +9329,7 @@ dehalting_z80_1:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_1
 
-no_interrupts_1:tst.b	z80_halt
-		bne.w	cpu_halt_is_on_1
-
-		bsr.w	z80_cpu_next_sweep
-
-ei_loop_1:	tst.b	z80_ei_return
-		beq.s	no_ei_return_1
-		bsr.l	finish_ei
-		bra.s	ei_loop_1
+no_interrupts_1:bsr.l	z80_run_slice
 
 no_ei_return_1:
 		IFGT	GAMEBOY_DEBUG
@@ -9312,11 +9347,13 @@ cpu_halt_is_on_1:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
+		IFNE	Z80_MODE-GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_2		;0! no update.
 		bsr.w	irq_timer
 no_timer_update_2:
+		ENDIF
 		ENDIF
 
 		and.b	#%11111100,$41(a6)
@@ -9355,15 +9392,7 @@ dehalting_z80_2:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_2
 
-no_interrupts_2:tst.b	z80_halt
-		bne.w	cpu_halt_is_on_2
-
-		bsr.w	z80_cpu_next_sweep
-
-ei_loop_2:	tst.b	z80_ei_return
-		beq.s	no_ei_return_2
-		bsr.l	finish_ei
-		bra.s	ei_loop_2
+no_interrupts_2:bsr.l	z80_run_slice
 
 no_ei_return_2:
 		IFGT	GAMEBOY_DEBUG
@@ -9372,7 +9401,8 @@ no_ei_return_2:
 		ENDIF
 
 cpu_halt_is_on_2:
-
+		tst.b	lcd_blank_phase
+		bne.w	lcd_blank_output
 		tst.b	old_refresh			;144/144 mode?
 		bne.s	no_144_144_2			;no.
 		bsr.w	scanline_draw			;yes. draw a scanline.
@@ -9398,14 +9428,22 @@ xan_drawed_2:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
+		IFNE	Z80_MODE-GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_3		;0! no update.
 		bsr.w	irq_timer
 no_timer_update_3:
 		ENDIF
+		ENDIF
 
-		add.b	#1,$04(a6)			;DIVIDER register.
+		IFNE	Z80_MODE
+		add.b	#1,$04(a6)			;legacy divider.
+		ELSE
+		IFNE	GAMEBOY_USERS
+		add.b	#1,$04(a6)
+		ENDIF
+		ENDIF
 		and.b	#%11111100,$41(a6)
 
 		move.l	h_values_indexed,a5
@@ -9456,15 +9494,7 @@ dehalting_z80_3:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_3
 
-no_interrupts_3:tst.b	z80_halt
-		bne.w	cpu_halt_is_on_3
-
-		bsr.w	z80_cpu_next_sweep
-
-ei_loop_3:	tst.b	z80_ei_return
-		beq.s	no_ei_return_3
-		bsr.l	finish_ei
-		bra.s	ei_loop_3
+no_interrupts_3:bsr.l	z80_run_slice
 
 no_ei_return_3:
 		IFGT	GAMEBOY_DEBUG
@@ -9482,11 +9512,13 @@ cpu_halt_is_on_3:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
+		IFNE	Z80_MODE-GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_4		;0! no update.
 		bsr.w	irq_timer
 no_timer_update_4:
+		ENDIF
 		ENDIF
 
 		and.b	#%11111100,$41(a6)
@@ -9526,15 +9558,7 @@ dehalting_z80_4:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_4
 
-no_interrupts_4:tst.b	z80_halt
-		bne.w	cpu_halt_is_on_4
-
-		bsr.w	z80_cpu_next_sweep
-
-ei_loop_4:	tst.b	z80_ei_return
-		beq.s	no_ei_return_4
-		bsr.l	finish_ei
-		bra.s	ei_loop_4
+no_interrupts_4:bsr.l	z80_run_slice_last
 
 no_ei_return_4:
 		IFGT	GAMEBOY_DEBUG
@@ -9549,11 +9573,15 @@ cpu_halt_is_on_4:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		IFEQ	GAMEBOY_USERS
+		IFNE	Z80_MODE
+		subq.b	#1,sound_length_div
+		bne.s	sound_length_line_done
+		move.b	#36,sound_length_div
+		bsr.w	sound_length_clock
+sound_length_line_done:
+		ENDIF
 		tst.b	snd_quality
 		beq.w	snd_high_do
-		tst.l	ahi_base
-		beq.s	snd_high_back
-		bsr.w	sound_length_clock
 		ENDIF
 
 snd_high_back:	cmp.l	#153,gb_scanlines		;end of lines?
@@ -9573,61 +9601,45 @@ next_scanline:	move.l	a2,a6
 		move.b	d7,$44(a6)			;next scanline (address).
 		bra.w	next_sline			;next horizontal line.
 
+lcd_blank_output:
+		tst.b	lcd_blank_presented
+		bne.w	xan_drawed_2
+		st	lcd_blank_presented
+		bsr.w	screen_draw_blank
+		bra.w	xan_drawed_2
+
+lcd_blank_vblank:
+		cmp.b	#1,lcd_blank_phase
+		bne.s	lcd_blank_vblank_done
+		move.b	#2,lcd_blank_phase
+lcd_blank_vblank_done:
+		rts
+
+; Keep the image blank through VBlank too: x/153 can draw as late as LY=153.
+lcd_blank_frame_end:
+		cmp.b	#2,lcd_blank_phase
+		bne.s	lcd_blank_frame_done
+		clr.b	lcd_blank_phase
+		clr.b	lcd_blank_presented
+lcd_blank_frame_done:
+		rts
+
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		input
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 input_irq:	move.b	(a6),d6
-		btst	#5,d6
-		beq.s	key_irq_buttons
-		btst	#4,d6
-		beq.s	key_irq_cross
-		bra.s	input_irq_exit
-
-key_irq_cross:	lea	directions_byte_o,a5
-		move.b	directions_byte,d7
-		cmp.b	(a5),d7
-		beq.s	input_irq_exit
-
-		btst.b	#4,$ff(a6)			;keypad irq?
-		beq.s	input_irq_exit			;no. quit.
-
-		bset.b	#4,$0f(a6)			;transition occurred.
-		move.b	d7,(a5)
-
-		IFGT	GAMEBOY_DEBUG
-		bsr.w	debug_p10
-		ENDIF
-
-		bra.s	input_irq_exit
-
-key_irq_buttons:lea	buttons_byte_o,a5
-		move.b	buttons_byte,d7
-		cmp.b	(a5),d7
-		beq.s	input_irq_exit
-
-		btst.b	#4,$ff(a6)			;keypad irq?
-		beq.s	input_irq_exit			;no. quit.
-
-		bset.b	#4,$0f(a6)			;transition occurred.
-		move.b	d7,(a5)
-
-		IFGT	GAMEBOY_DEBUG
-		bsr.w	debug_p10
-		ENDIF
-
-input_irq_exit:	rts
+		bra.w	joypad_update
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		do audio sweeps
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		IFEQ	GAMEBOY_USERS
-snd_high_do:	tst.l	ahi_base
+snd_high_do:	tst.l	ahi_audio_ctrl
 		beq.w	snd_high_back
 
-		bsr.w	sound_length_clock
-
+		IFNE	Z80_MODE
 		tst.b	snd_chnlI
 		bne.w	snd_high_no_I_f
 
@@ -9685,6 +9697,7 @@ snd_high_I_f_pop:
 		movem.l	(SP)+,d0-d3/a0-a2
 
 snd_high_no_I_f:
+		ENDIF
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		volume envelopes
@@ -9921,11 +9934,6 @@ no_s_IV_addk:	move.l	sound_IV_pan,d2
 snd_high_no_IV:	bra.w	snd_high_back
 
 sound_length_clock:
-		subq.b	#1,sound_length_div
-		beq.s	sound_length_clock_go
-		rts
-sound_length_clock_go:
-		move.b	#36,sound_length_div
 		movem.l	d0-d3/a0-a2,-(SP)
 		move.l	a2,a0
 		add.l	#$ff00,a0
@@ -9937,7 +9945,9 @@ sound_length_clock_go:
 		subq.b	#1,sound_I_length
 		bne.w	sound_length_II
 		clr.b	sound_I_v_envelope
+		IFNE	Z80_MODE
 		clr.b	sound_I_f_envelope
+		ENDIF
 		clr.l	sound_I_v
 		bclr.b	#0,$26(a0)
 		moveq.l	#0,d0
@@ -9985,6 +9995,11 @@ sound_length_clock_pop:
 		rts
 
 sound_length_silence:
+		tst.l	ahi_audio_ctrl
+		beq.s	sound_length_silence_exit
+		lea	snd_chnlI,a6
+		tst.b	(a6,d0.w)
+		bne.s	sound_length_silence_exit
 		cmp.b	#2,snd_quality
 		beq.s	sound_length_silence_exit
 		movem.l	d0-d3/a0-a2,-(SP)
@@ -10000,6 +10015,336 @@ sound_length_silence:
 sound_length_silence_exit:
 		rts
 
+		IFEQ	Z80_MODE
+; At cartridge entry LY already reads 0, but the LCD is still in VBlank.
+; Run the last 52 dots of line 153 before the first full scanline.
+dmg_boot_lcd_tail:
+		move.b	#$85,$ff41(a2)
+		clr.b	$ff44(a2)
+		moveq.l	#13,d6
+		bra.s	sound_cpu_begin_slice
+
+; Split CPU slices at DIV-APU edges and pending timer IRQ deadlines,
+; not on individual wave fetches or TIMA increments.
+sound_cpu_slice:
+		move.l	z80_cycles,d6
+sound_cpu_begin_slice:
+		cmp.b	#1,z80_halt
+		beq.w	sound_cpu_done
+		add.l	z80_slice_debt,d6	;an instruction can finish past a slice boundary.
+		ble.w	sound_cpu_debt
+		move.l	d6,sound_slice_tail
+sound_cpu_run:
+		moveq.l	#0,d7
+		move.w	sound_div_counter,d7
+		and.w	#$1fff,d7
+		lsr.w	#2,d7
+		neg.w	d7
+		add.w	#2048,d7
+		move.l	sound_slice_tail,d6
+		cmp.l	d7,d6
+		bls.s	sound_cpu_budget
+		move.l	d7,d6
+sound_cpu_budget:
+		btst.b	#2,$ffff(a2)
+		beq.s	sound_cpu_no_timer_limit
+		bsr.w	timer_slice_limit
+sound_cpu_no_timer_limit:
+		sub.l	d6,sound_slice_tail
+		move.l	d6,sound_div_budget
+		move.l	d6,a5
+		move.b	#1,sound_div_active
+		moveq.l	#0,d7
+		move.b	z80_irq_cycles,d7
+		beq.s	sound_cpu_check_irq
+		sub.l	d6,d7
+		bpl.s	sound_cpu_irq_wait
+		clr.b	z80_irq_cycles
+		neg.l	d7
+		move.l	d7,a5
+		moveq.l	#0,d7
+sound_cpu_check_irq:
+		btst.b	#2,$ff0f(a2)
+		beq.s	sound_cpu_fetch
+		btst.b	#2,$ffff(a2)
+		beq.s	sound_cpu_fetch
+		clr.b	z80_halt
+		tst.b	i_flag
+		bne.s	sound_cpu_fetch
+		bsr.l	reti_back
+		bra.s	sound_cpu_ei
+sound_cpu_fetch:
+		tst.b	z80_halt
+		bne.s	sound_cpu_idle
+		moveq.l	#0,d7
+		IFGT	GAMEBOY_DEBUG
+		bsr.l	debug_output
+		ELSE
+		bsr.l	z80_fetch_opcode
+		ENDIF
+sound_cpu_ei:	tst.b	z80_ei_return
+		beq.s	sound_cpu_elapsed
+		bsr.l	finish_ei
+		bra.s	sound_cpu_ei
+sound_cpu_elapsed:
+		cmp.b	#2,z80_halt
+		bne.s	sound_cpu_sync
+sound_cpu_idle:	move.l	a5,d6
+		ble.s	sound_cpu_sync
+		move.l	#0,a5			;HALT keeps DIV running.
+		bra.s	sound_cpu_sync
+sound_cpu_irq_wait:
+		move.b	d7,z80_irq_cycles	;an entry can straddle two slices.
+		move.l	#0,a5
+sound_cpu_sync:	bsr.s	sound_div_sync
+		clr.b	sound_div_active
+		cmp.b	#1,z80_halt
+		beq.s	sound_cpu_done
+		move.l	a5,d6
+		bpl.s	sound_cpu_tail
+		add.l	d6,sound_slice_tail
+sound_cpu_tail:	move.l	sound_slice_tail,d6
+		bgt.s	sound_cpu_run
+sound_cpu_debt:	move.l	d6,z80_slice_debt
+sound_cpu_done:	rts
+
+; Synchronize an APU/DIV write after the opcode debits its cycles. EI and
+; deferred IRQ dispatch temporarily split the real remaining budget.
+sound_div_sync:
+		tst.b	sound_div_active
+		beq.s	sound_div_sync_done
+		movem.l	d6-d7/a6,-(SP)
+		move.l	a5,d7
+		tst.b	z80_ei_return
+		beq.s	sound_div_remaining
+		add.l	z80_cycles_left,d7
+		cmp.b	#3,z80_ei_return
+		beq.s	sound_div_remaining
+		subq.l	#1,d7
+sound_div_remaining:
+		move.l	sound_div_budget,d6
+		move.l	d7,sound_div_budget
+		sub.l	d7,d6
+		lsl.l	#2,d6
+		add.l	d6,sound_wave_time
+		bpl.s	sound_div_wave_done
+		bsr.l	sound_wave_rebase_time
+sound_div_wave_done:
+		move.w	sound_div_counter,d7
+		add.w	d6,sound_div_counter
+		move.b	sound_div_counter,$ff04(a2)
+		tst.w	timer_shift			;shift and reload phase are adjacent bytes.
+		beq.s	sound_div_apu_edge
+		bsr.w	timer_advance
+sound_div_apu_edge:
+		btst	#12,d7
+		beq.s	sound_div_sync_pop
+		btst.b	#4,sound_div_counter
+		bne.s	sound_div_sync_pop
+		bsr.s	sound_frame_edge
+sound_div_sync_pop:
+		movem.l	(SP)+,d6-d7/a6
+sound_div_sync_done:
+		rts
+
+sound_div_reset:
+		bsr.s	sound_div_sync
+		bsr.w	timer_div_edge
+		btst.b	#4,sound_div_counter
+		beq.s	sound_div_clear
+		clr.w	sound_div_counter
+		bra.s	sound_frame_edge
+sound_div_clear:clr.w	sound_div_counter
+		rts
+
+sound_frame_edge:
+		btst.b	#7,$ff26(a2)
+		beq.s	sound_frame_done
+		addq.b	#1,sound_frame_phase
+		and.b	#3,sound_frame_phase
+		btst.b	#0,sound_frame_phase
+		beq.s	sound_frame_done
+		bsr.w	sound_length_clock
+		cmp.b	#3,sound_frame_phase
+		beq.l	sound_sweep_clock
+sound_frame_done:
+		rts
+
+; d6 = elapsed T-cycles, d7.w = old divider. Count the falling edges in
+; bulk, stopping only at overflows to account for the delayed reload.
+timer_advance:
+		tst.l	d6
+		beq.s	timer_advance_exit
+		movem.l	d0-d1/d6-d7,-(SP)
+		cmp.b	#1,timer_phase
+		bne.s	timer_advance_clear
+		move.b	$ff06(a2),$ff05(a2)
+		bset.b	#2,$ff0f(a2)
+		cmp.l	#4,d6
+		bne.s	timer_advance_clear
+		move.b	#2,timer_phase
+		bra.s	timer_advance_edges
+timer_advance_clear:
+		clr.b	timer_phase
+timer_advance_edges:
+		moveq.l	#0,d1
+		move.b	timer_shift,d1
+		beq.s	timer_advance_pop
+		and.l	#$ffff,d7
+		and.w	timer_mask,d7
+		add.l	d7,d6
+		move.w	d6,d7
+		and.w	timer_mask,d7
+		lsr.l	d1,d6
+		beq.s	timer_advance_pop
+timer_advance_ticks:
+		moveq.l	#0,d0
+		move.b	$ff05(a2),d0
+		move.w	#256,d1
+		sub.w	d0,d1
+		sub.w	d1,d6
+		blo.s	timer_advance_add
+		bne.s	timer_advance_reload
+		tst.w	d7
+		beq.s	timer_advance_pending
+		cmp.w	#4,d7
+		bne.s	timer_advance_reload
+		move.b	#2,timer_phase
+timer_advance_reload:
+		move.b	$ff06(a2),$ff05(a2)
+		bset.b	#2,$ff0f(a2)
+		tst.w	d6
+		bne.s	timer_advance_ticks
+		bra.s	timer_advance_pop
+timer_advance_add:
+		add.w	d1,d6
+		add.b	d6,$ff05(a2)
+		bra.s	timer_advance_pop
+timer_advance_pending:
+		clr.b	$ff05(a2)
+		move.b	#1,timer_phase
+timer_advance_pop:
+		movem.l	(SP)+,d0-d1/d6-d7
+timer_advance_exit:
+		rts
+
+timer_div_edge:
+		move.w	d6,-(SP)
+		move.w	timer_bit,d6
+		and.w	sound_div_counter,d6
+		beq.s	timer_div_no_edge
+		bsr.s	timer_extra_tick
+timer_div_no_edge:
+		move.w	(SP)+,d6
+		rts
+
+timer_extra_tick:
+		cmp.b	#2,timer_phase
+		beq.s	timer_extra_done
+		addq.b	#1,$ff05(a2)
+		bne.s	timer_extra_done
+		move.b	#1,timer_phase
+timer_extra_done:
+		rts
+
+; Decode TAC into the selected divider bit, edge mask and shift count.
+; Input is d6.b. A zero bit/shift denotes a disabled timer.
+timer_configure:
+		btst	#2,d6
+		bne.s	timer_configure_on
+		clr.b	timer_shift
+		clr.w	timer_bit
+		rts
+timer_configure_on:
+		movem.l	d0-d1,-(SP)
+		moveq.l	#3,d0
+		and.b	d6,d0
+		bne.s	timer_configure_shift
+		moveq.l	#4,d0
+timer_configure_shift:
+		add.w	d0,d0
+		addq.w	#2,d0
+		move.b	d0,timer_shift
+		subq.w	#1,d0
+		moveq.l	#1,d1
+		lsl.w	d0,d1
+		move.w	d1,timer_bit
+		add.w	d1,d1
+		subq.w	#1,d1
+		move.w	d1,timer_mask
+		movem.l	(SP)+,d0-d1
+		rts
+
+; Cap d6 (M-cycles) at the next reload when the interrupt can wake the CPU.
+timer_slice_limit:
+		btst.b	#2,$ff0f(a2)
+		bne.s	timer_limit_done
+		cmp.b	#1,timer_phase
+		beq.s	timer_limit_pending
+		tst.b	timer_shift
+		beq.s	timer_limit_done
+		movem.l	d0-d1,-(SP)
+		moveq.l	#0,d0
+		move.b	$ff05(a2),d0
+		neg.w	d0
+		add.w	#256,d0
+		moveq.l	#0,d1
+		move.b	timer_shift,d1
+		lsl.l	d1,d0
+		moveq.l	#0,d7
+		move.w	sound_div_counter,d7
+		and.w	timer_mask,d7
+		sub.l	d7,d0
+		lsr.l	#2,d0
+		addq.l	#1,d0
+		cmp.l	d0,d6
+		bls.s	timer_limit_pop
+		move.l	d0,d6
+timer_limit_pop:
+		movem.l	(SP)+,d0-d1
+timer_limit_done:
+		rts
+timer_limit_pending:
+		moveq.l	#1,d6
+		rts
+
+; Register writes can bring the deadline forward. Return to the slice
+; scheduler after the writing opcode, preserving its unspent cycles.
+timer_replan:
+		tst.b	sound_div_active
+		beq.s	timer_replan_done
+		btst.b	#2,$ffff(a2)
+		beq.s	timer_replan_done
+		tst.w	timer_shift
+		beq.s	timer_replan_done
+		tst.b	z80_ei_return
+		bne.s	timer_replan_done
+		move.l	a5,d6
+		ble.s	timer_replan_done
+		add.l	d6,sound_slice_tail
+		move.l	#0,a5
+		clr.l	sound_div_budget
+timer_replan_done:
+		rts
+
+sound_div_rebase:
+		move.l	a0,-(SP)
+		move.l	gb_memory,a0
+		clr.w	sound_div_counter
+		move.b	$ff04(a0),sound_div_counter
+		clr.b	sound_frame_phase
+		clr.b	sound_div_active
+		clr.b	timer_phase
+		clr.l	z80_slice_debt
+		move.l	d6,-(SP)
+		move.b	$ff07(a0),d6
+		bsr.w	timer_configure
+		move.l	(SP)+,d6
+		bsr.l	sound_wave_reset
+		move.l	(SP)+,a0
+		rts
+		ENDIF
+
 		ENDIF
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -10007,25 +10352,18 @@ sound_length_silence_exit:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 gb_memory_at_start:
+		clr.b	lcd_blank_phase
+		clr.b	lcd_blank_presented
 		move.l	gb_memory,a0
 		add.l	#$ff00,a0
 
 		move.b	#$CF,$00(a0)
 		move.b	#$00,$01(a0)
 		move.b	#$7E,$02(a0)
-		move.b	#$FF,$03(a0)
 		move.b	#$AB,$04(a0)
 		move.b	#$00,$05(a0)
 		move.b	#$00,$06(a0)
 		move.b	#%11111000,$07(a0)
-
-		move.b	#$FF,$08(a0)
-		move.b	#$FF,$09(a0)
-		move.b	#$FF,$0A(a0)
-		move.b	#$FF,$0B(a0)
-		move.b	#$FF,$0C(a0)
-		move.b	#$FF,$0D(a0)
-		move.b	#$FF,$0E(a0)
 
 		move.b	#$E1,$0F(a0)
 		move.b	#$80,$10(a0)
@@ -10033,7 +10371,6 @@ gb_memory_at_start:
 		move.b	#$F3,$12(a0)
 		move.b	#$FF,$13(a0)
 		move.b	#$BF,$14(a0)
-		move.b	#$FF,$15(a0)
 		move.b	#$3F,$16(a0)
 		move.b	#$00,$17(a0)
 		move.b	#$FF,$18(a0)
@@ -10043,7 +10380,6 @@ gb_memory_at_start:
 		move.b	#$9F,$1C(a0)
 		move.b	#$FF,$1D(a0)
 		move.b	#$BF,$1E(a0)
-		move.b	#$FF,$1F(a0)
 		move.b	#$FF,$20(a0)
 		move.b	#$00,$21(a0)
 		move.b	#$00,$22(a0)
@@ -10051,16 +10387,6 @@ gb_memory_at_start:
 		move.b	#$77,$24(a0)
 		move.b	#$F3,$25(a0)
 		move.b	#$F1,$26(a0)
-
-		move.b	#$00,$27(a0)
-		move.b	#$00,$28(a0)
-		move.b	#$00,$29(a0)
-		move.b	#$00,$2A(a0)
-		move.b	#$00,$2B(a0)
-		move.b	#$00,$2C(a0)
-		move.b	#$00,$2D(a0)
-		move.b	#$00,$2E(a0)
-		move.b	#$00,$2F(a0)
 
 		move.b	#$06,$30(a0)		;cgb like wave ram init.
 		move.b	#$FE,$31(a0)
@@ -10091,12 +10417,23 @@ gb_memory_at_start:
 		move.b	#$00,$4A(a0)
 		move.b	#$00,$4B(a0)
 		move.b	#$00,$FF(a0)
+		bsr.w	dmg_unmapped_io
 
 		IFEQ	GAMEBOY_USERS
 		clr.b	sound_I_onf_master
 		clr.b	sound_II_onf_master
 		clr.b	sound_III_onf_master
 		clr.b	sound_IV_onf_master
+		clr.b	sound_I_length
+		clr.b	sound_II_length
+		clr.w	sound_III_length
+		clr.b	sound_IV_length
+		move.b	#36,sound_length_div
+		bsr.w	sound_import_regs
+		IFEQ	Z80_MODE
+		bsr.l	sound_div_rebase
+		move.w	#$abcc,sound_div_counter	;DMG divider phase at PC=$0100.
+		ENDIF
 		ENDIF
 
 		clr.b	irq_status_flags
@@ -10121,6 +10458,93 @@ gb_memory_at_start:
 		clr.b	mbc5_rom_bank0
 
 		clr.l	freq_storage
+		rts
+
+; CPU reads use the RAM image directly, so seed the unmapped bytes on
+; both reset and GBS restore. The I/O write table ignores these addresses.
+dmg_unmapped_io:
+		move.l	gb_memory,a1
+		add.l	#$ff00,a1
+		moveq.l	#-1,d0
+		move.b	d0,$03(a1)
+		move.l	d0,$08(a1)
+		move.w	d0,$0c(a1)
+		move.b	d0,$0e(a1)
+		move.b	d0,$15(a1)
+		move.b	d0,$1f(a1)
+		move.b	d0,$27(a1)
+		move.l	d0,$28(a1)
+		move.l	d0,$2c(a1)
+		lea	$4c(a1),a1
+		moveq.l	#$34/4-1,d0
+dmg_unmapped_fill:
+		move.l	#-1,(a1)+
+		dbra	d0,dmg_unmapped_fill
+		rts
+
+dmg_mirror_wram:
+		move.l	gb_memory,a1
+		add.l	#$c000,a1
+		lea	$2000(a1),a6
+		move.w	#$1e00/4-1,d0
+dmg_mirror_copy:
+		move.l	(a1)+,(a6)+
+		dbra	d0,dmg_mirror_copy
+		rts
+
+; Recreate the boot ROM's VRAM output without running the animation.
+dmg_boot_vram:
+		move.l	gb_memory,a0
+		add.l	#$8000,a0
+		move.w	#$2000/4-1,d0
+dmg_boot_vram_clear:
+		clr.l	(a0)+
+		dbra	d0,dmg_boot_vram_clear
+		sub.l	#$1ff0,a0
+		move.l	cartridge,a1
+		lea	$104(a1),a1
+		moveq.l	#48-1,d0
+dmg_boot_logo_byte:
+		move.b	(a1)+,d1
+		bsr.s	dmg_boot_logo_nibble
+		bsr.s	dmg_boot_logo_nibble
+		dbra	d0,dmg_boot_logo_byte
+		move.l	#$3c004200,(a0)+
+		move.l	#$b900a500,(a0)+
+		move.l	#$b900a500,(a0)+
+		move.l	#$42003c00,(a0)+
+
+		move.l	gb_memory,a0
+		add.l	#$9904,a0
+		moveq.l	#1,d1
+		moveq.l	#11,d0
+dmg_boot_logo_top:
+		move.b	d1,(a0)+
+		addq.b	#1,d1
+		dbra	d0,dmg_boot_logo_top
+		move.b	#$19,(a0)
+		lea	$14(a0),a0
+		moveq.l	#11,d0
+dmg_boot_logo_bottom:
+		move.b	d1,(a0)+
+		addq.b	#1,d1
+		dbra	d0,dmg_boot_logo_bottom
+		rts
+
+dmg_boot_logo_nibble:
+		moveq.l	#0,d2
+		moveq.l	#3,d3
+dmg_boot_logo_bit:
+		lsl.b	#2,d2
+		add.b	d1,d1
+		bcc.s	dmg_boot_logo_zero
+		or.b	#3,d2
+dmg_boot_logo_zero:
+		dbra	d3,dmg_boot_logo_bit
+		move.b	d2,(a0)+
+		clr.b	(a0)+
+		move.b	d2,(a0)+
+		clr.b	(a0)+
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -10218,10 +10642,7 @@ debug_scanline_out:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		IFEQ	GAMEBOY_USERS
-sfx_update_all:	tst.b	snd_master
-		bne.w	sfx_back
-
-		tst.l	ahi_base
+sfx_update_all:	tst.l	ahi_audio_ctrl
 		beq.w	sfx_back
 
 		move.l	sfx_y_adder,d0
@@ -10304,7 +10725,7 @@ no_s_I_addb:	move.l	sound_I_pan,d2
 		move.l	ahi_audio_ctrl,a2
 		bsr.w	sound_set_volume
 
-		move.w	$13(a5),d7
+		move.w	sound_raw_regs+$13-$10,d7
 		and.l	#%1111111100000111,d7
 		ror.w	#8,d7
 
@@ -10395,7 +10816,7 @@ no_s_II_addb:	move.l	sound_II_pan,d2
 		move.l	ahi_audio_ctrl,a2
 		bsr.w	sound_set_volume
 
-		move.w	$18(a5),d7
+		move.w	sound_raw_regs+$18-$10,d7
 		and.l	#%1111111100000111,d7
 		ror.w	#8,d7
 
@@ -10511,7 +10932,7 @@ no_s_III_addk:	move.l	sound_III_pan,d2
 		move.l	ahi_audio_ctrl,a2
 		bsr.w	sound_set_volume
 
-		move.w	$1d(a5),d6
+		move.w	sound_raw_regs+$1d-$10,d6
 		and.l	#%1111111100000111,d6
 		ror.w	#8,d6
 
@@ -10593,7 +11014,7 @@ prior_i_0:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10613,7 +11034,7 @@ prior_ii_0:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10629,7 +11050,7 @@ prior_ii_0:	btst.b	#7,$40(a6)			;lcd on?
 prior_iii_0:	bclr.b	#2,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10646,7 +11067,7 @@ prior_iii_0:	bclr.b	#2,$0f(a6)
 prior_iv_0:	bclr.b	#3,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10662,7 +11083,7 @@ prior_iv_0:	bclr.b	#3,$0f(a6)
 prior_v_0:	bclr.b	#4,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10681,7 +11102,7 @@ prior_i_1:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10701,7 +11122,7 @@ prior_ii_1:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10717,7 +11138,7 @@ prior_ii_1:	btst.b	#7,$40(a6)			;lcd on?
 prior_iii_1:	bclr.b	#2,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10734,7 +11155,7 @@ prior_iii_1:	bclr.b	#2,$0f(a6)
 prior_iv_1:	bclr.b	#3,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10750,7 +11171,7 @@ prior_iv_1:	bclr.b	#3,$0f(a6)
 prior_v_1:	bclr.b	#4,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10769,7 +11190,7 @@ prior_i_2:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10789,7 +11210,7 @@ prior_ii_2:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10805,7 +11226,7 @@ prior_ii_2:	btst.b	#7,$40(a6)			;lcd on?
 prior_iii_2:	bclr.b	#2,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10822,7 +11243,7 @@ prior_iii_2:	bclr.b	#2,$0f(a6)
 prior_iv_2:	bclr.b	#3,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10838,7 +11259,7 @@ prior_iv_2:	bclr.b	#3,$0f(a6)
 prior_v_2:	bclr.b	#4,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10857,7 +11278,7 @@ prior_i_3:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10877,7 +11298,7 @@ prior_ii_3:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10893,7 +11314,7 @@ prior_ii_3:	btst.b	#7,$40(a6)			;lcd on?
 prior_iii_3:	bclr.b	#2,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10910,7 +11331,7 @@ prior_iii_3:	bclr.b	#2,$0f(a6)
 prior_iv_3:	bclr.b	#3,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10926,7 +11347,7 @@ prior_iv_3:	bclr.b	#3,$0f(a6)
 prior_v_3:	bclr.b	#4,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10945,7 +11366,7 @@ prior_i_4:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10965,7 +11386,7 @@ prior_ii_4:	btst.b	#7,$40(a6)			;lcd on?
 		bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10981,7 +11402,7 @@ prior_ii_4:	btst.b	#7,$40(a6)			;lcd on?
 prior_iii_4:	bclr.b	#2,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -10998,7 +11419,7 @@ prior_iii_4:	bclr.b	#2,$0f(a6)
 prior_iv_4:	bclr.b	#3,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -11014,7 +11435,7 @@ prior_iv_4:	bclr.b	#3,$0f(a6)
 prior_v_4:	bclr.b	#4,$0f(a6)
 
 		IFEQ	Z80_MODE
-		bsr.w	write_d6_stackx
+		bsr.w	write_irq_stack
 		ELSE
 		ror.w	#8,d6
 		subq.w	#2,d5
@@ -11089,7 +11510,8 @@ lcd_oam_no_vbr_filtering:
 ;		next frame - check the buttons and loop
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-next_frame:	bsr.w	push_z80
+next_frame:	bsr.w	lcd_blank_frame_end
+		bsr.w	push_z80
 		cmp.b	#2,old_render
 		bne.s	next_frame_window_done
 		tst.b	scaling_status
@@ -12181,6 +12603,7 @@ req_change_screen_mode_tags:
 
 input_status:	dc.b	0
 gbs_file_id:	dc.b	0
+input_poll_lines: dc.b	1
 		even
 
 joy_name_1:	dc.b	"KEYBOARD",0
@@ -12453,6 +12876,8 @@ h_values:	dc.b	2,3,3,0,0
 h_values_indexed:
 		dc.l	0
 
+lcd_blank_phase: dc.b	0		;0 = visible, -1 = off, 1 = first frame, 2 = its VBlank.
+lcd_blank_presented: dc.b 0
 visual_frame:	dc.b	0				;used buffer number.
 		even
 
@@ -12739,7 +13164,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad 1.11.00"
+menu_title:	dc.b	"Wzonka-Lad 1.12.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -13000,7 +13425,7 @@ misc_txt_2:	dc.b	"GameGenie patch code",0
 ;		menu gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_scr_txt:	dc.b	"Wzonka-Lad 1.11.00"
+menu_scr_txt:	dc.b	"Wzonka-Lad 1.12.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -13948,7 +14373,7 @@ about_text_2:	dc.b	1
 		dc.l	about_txt_2
 		dc.l	0
 
-about_txt_1:	dc.b	"WZONKA-LAD 1.11.00"
+about_txt_1:	dc.b	"WZONKA-LAD 1.12.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"R"
 		ELSE
@@ -14389,7 +14814,7 @@ misc_win_txt:	dc.b	"Misc settings",0
 ;		the version string
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-version_data:	dc.b	"$VER: Wzonka-Lad 1.11.00"
+version_data:	dc.b	"$VER: Wzonka-Lad 1.12.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -14557,9 +14982,6 @@ menu_favo_nm:	dc.b	"PROGDIR:favourites/favourites.list",0
 
 buttons_byte:	dc.b	$cf
 directions_byte:dc.b	$cf
-buttons_byte_o:	dc.b	$cf
-directions_byte_o:
-		dc.b	$cf
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -15461,11 +15883,34 @@ sound_IV_v_envelope_counter:
 		dc.l	0
 
 sound_length_div:	dc.b	36
+sound_guest_only:	dc.b	0
 sound_I_length:	dc.b	0
 sound_II_length:	dc.b	0
 sound_IV_length:	dc.b	0
 		even
 sound_III_length:	dc.w	0
+
+		IFEQ	Z80_MODE
+sound_div_counter: dc.w	0
+sound_frame_phase: dc.b	0
+sound_div_active: dc.b	0
+z80_irq_cycles:	dc.b	0
+		even
+sound_div_budget: dc.l	0
+sound_slice_tail: dc.l	0
+z80_slice_debt:	dc.l	0
+timer_bit:	dc.w	0
+timer_mask:	dc.w	0
+timer_shift:	dc.b	0
+timer_phase:	dc.b	0			;0 = counting, 1 = overflow, 2 = reload.
+sound_sweep_timer: dc.b	0
+sound_sweep_negated: dc.b	0
+sound_wave_time: dc.l	$40000000
+sound_wave_next: dc.l	0
+sound_wave_period: dc.l	4096
+sound_wave_index: dc.b	0
+		even
+		ENDIF
 
 sound_I_status:	
 sound_I_onf:	dc.b	0
@@ -15551,6 +15996,8 @@ sound_env_volumes:
 		dc.l	(($10000/15)*15)-2
 
 sound_III_lst:	dc.l	0
+sound_raw_regs:	ds.b	$26-$10
+		even
 
 sound_III_f:	dc.w	0
 sound_III_fh:	dc.b	0
@@ -15637,26 +16084,34 @@ sound_4_freq_table:
 ffxx_jmp_table:	dc.l	do_joystick
 		dc.l	sio_register
 		dc.l	sio_control
-		dc.l	gb_mem_wr
+		dc.l	no_write				;$03.
 		dc.l	clear_divider
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
+		IFEQ	Z80_MODE
+		dc.l	timer_write_count
+		dc.l	timer_write_modulo
+		ELSE
+		dc.l	gb_mem_wr,gb_mem_wr
+		ENDIF
 		dc.l	timc_protect
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
+		dc.l	no_write,no_write,no_write,no_write	;$08-$0b.
+		dc.l	no_write,no_write,no_write		;$0c-$0e.
 		dc.l	irq_protect_0f				;$0f.
 
+		IFEQ	GAMEBOY_USERS
+		dc.l	sound_guest_write,sound_guest_write,sound_guest_write,sound_guest_write,sound_guest_write
+		dc.l	no_write				;$15.
+		dc.l	sound_guest_write,sound_guest_write,sound_guest_write,sound_guest_write
+		dc.l	sound_guest_write,sound_guest_write,sound_guest_write,sound_guest_write,sound_guest_write
+		dc.l	no_write				;$1f.
+		dc.l	sound_guest_write,sound_guest_write,sound_guest_write,sound_guest_write
+		dc.l	sound_guest_write,sound_guest_write,sound_guest_write
+		ELSE
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
-		dc.l	gb_mem_wr
+		dc.l	no_write				;$15.
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
@@ -15666,7 +16121,7 @@ ffxx_jmp_table:	dc.l	do_joystick
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
-		dc.l	gb_mem_wr				;$1f.
+		dc.l	no_write				;$1f.
 
 		dc.l	rom_write
 		dc.l	rom_write
@@ -15675,16 +16130,30 @@ ffxx_jmp_table:	dc.l	do_joystick
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr
-		dc.l	gb_mem_wr				;$2f.
+		ENDIF
+		dc.l	no_write				;$27.
+		dc.l	no_write
+		dc.l	no_write
+		dc.l	no_write
+		dc.l	no_write
+		dc.l	no_write
+		dc.l	no_write
+		dc.l	no_write
+		dc.l	no_write				;$2f.
 
+		IFEQ	GAMEBOY_USERS
+		IFEQ	Z80_MODE
+		dc.l	sound_wave_write,sound_wave_write,sound_wave_write,sound_wave_write
+		dc.l	sound_wave_write,sound_wave_write,sound_wave_write,sound_wave_write
+		dc.l	sound_wave_write,sound_wave_write,sound_wave_write,sound_wave_write
+		dc.l	sound_wave_write,sound_wave_write,sound_wave_write,sound_wave_write
+		ELSE
+		dc.l	gb_mem_wr,gb_mem_wr,gb_mem_wr,gb_mem_wr
+		dc.l	gb_mem_wr,gb_mem_wr,gb_mem_wr,gb_mem_wr
+		dc.l	gb_mem_wr,gb_mem_wr,gb_mem_wr,gb_mem_wr
+		dc.l	gb_mem_wr,gb_mem_wr,gb_mem_wr,gb_mem_wr
+		ENDIF
+		ELSE
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write
@@ -15701,6 +16170,7 @@ ffxx_jmp_table:	dc.l	do_joystick
 		dc.l	rom_write
 		dc.l	rom_write
 		dc.l	rom_write				;$3f.
+		ENDIF
 
 ;		dc.l	sound_I_0
 ;		dc.l	sound_I_1
@@ -16471,7 +16941,7 @@ serial_device_status:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 z80_cycles_left:dc.l	0
-z80_ei_return:	dc.b	0				;1 = enable after next opcode, 2 = cancelled.
+z80_ei_return:	dc.b	0				;1 = delayed EI, 2 = cancelled, 3 = IF/IE write.
 z80_halt_bug:	dc.b	0
 		even
 

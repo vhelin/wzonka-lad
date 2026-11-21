@@ -276,7 +276,10 @@ add_sp_offset:	move.b	(a0)+,d6
 		rts
 
 finish_ei:	move.l	a5,d6
+		cmp.b	#3,z80_ei_return
+		beq.s	finish_irq_write
 		subq.l	#1,d6					;remove the temporary one-cycle budget.
+finish_irq_write:
 		add.l	z80_cycles_left,d6
 		move.l	d6,a5
 		cmp.b	#1,z80_ei_return
@@ -284,6 +287,12 @@ finish_ei:	move.l	a5,d6
 		clr.b	i_flag
 finish_ei_cancelled:
 		clr.b	z80_ei_return
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		bsr.l	timer_replan
+		ENDIF
+		ENDIF
 		bra.w	reti_back
 
 z80_start:	move.l	bank_address,a0				;the rom area.
@@ -305,6 +314,9 @@ z80_start:	move.l	bank_address,a0				;the rom area.
 		move.b	#1,h_the_flag				;h = 1!
 		clr.b	z80_ei_return
 		clr.b	z80_halt_bug
+		IFEQ	Z80_MODE
+		clr.b	z80_irq_cycles
+		ENDIF
 
 		move.b	#%0,mbc1_status
 		move.l	#1,mbc5_rom_bank			;b0, b1.
@@ -324,6 +336,29 @@ z80_cpu_next_sweep:
 		ELSE
 		bra.w	z80_fetch_opcode
 		ENDIF
+
+z80_run_slice_last:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		move.l	z80_cycles,d6
+		addq.l	#4,d6				;four 22-cycle slices plus 26 = 114 M-cycles.
+		bra.l	sound_cpu_begin_slice
+		ENDIF
+		ENDIF
+z80_run_slice:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bra.l	sound_cpu_slice
+		ENDIF
+		ENDIF
+		tst.b	z80_halt
+		bne.s	cpu_slice_done
+		bsr.w	z80_cpu_next_sweep
+cpu_slice_ei:	tst.b	z80_ei_return
+		beq.s	cpu_slice_done
+		bsr.l	finish_ei
+		bra.s	cpu_slice_ei
+cpu_slice_done:	rts
 
 z80_fetch_opcode:
 		move.b	(a0)+,d7
@@ -346,6 +381,10 @@ write_d6_stack:	bsr.s	write_d6_stackx
 		fetch_next_i
 
 		cnop	0,4
+write_irq_stack:move.b	#1,i_flag				;disable IME before pushing an interrupt's PC.
+		IFEQ	Z80_MODE
+		move.b	#5,z80_irq_cycles			;the scanline dispatcher runs before the slice budget is set.
+		ENDIF
 ; Test the original SP: both bytes must belong to one ordinary RAM range.
 ; SP=$de01 crosses the WRAM echo boundary; $ff81 crosses into I/O.
 write_d6_stackx:cmp.w	#$ff82,d5
@@ -424,16 +463,16 @@ gb_mem_wr_denied:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		cnop	0,4
-lcd_mode_write:	;btst	#7,d6
-		;bne.s	lcd_mode_write_done
-
-		;cmp.l	#144,gb_scanlines
-		;blt.s	lcd_mode_write_done
-
-		;or.b	#%10000000,d6
-
+lcd_mode_write:	lea	$ff40(a2),a6
+		btst	#7,d6
+		beq.s	lcd_mode_off
+		btst.b	#7,(a6)
+		bne.s	lcd_mode_write_done
+		move.b	#1,lcd_blank_phase
+		bra.s	lcd_mode_write_done
+lcd_mode_off:	st	lcd_blank_phase
 lcd_mode_write_done:
-		move.b	d6,(a2,d7.l)
+		move.b	d6,(a6)
 		rts
 
 		cnop	0,4
@@ -456,40 +495,99 @@ lcd_write_no_irq:
 		rts
 
 		cnop	0,4
-irq_protect_0f:	or.b	#%11100000,d6
-;		cmp.b	(a2,d7.l),d6
-;		beq.s	irq_protect_0f_exit
+irq_protect_0f:
+irq_protect_ff:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		ENDIF
+		ENDIF
+		or.b	#%11100000,d6
 		move.b	d6,(a2,d7.l)
-;		tst.b	i_flag
-;		beq.s	irq_protect_ff_wowza
-irq_protect_0f_exit:
+
+		IFEQ	Z80_MODE
+		tst.b	i_flag
+		bne.s	irq_write_done
+		tst.b	z80_ei_return			;a deferred check is already armed.
+		bne.s	irq_write_done
+		move.b	$ff0f(a2),d6
+		and.b	$ffff(a2),d6
+		and.b	#$1f,d6
+		beq.s	irq_write_done
+; Let the writing opcode finish, then check IRQs before fetching again.
+		move.l	a5,z80_cycles_left
+		sub.l	a5,a5
+		move.b	#3,z80_ei_return
+irq_write_done:
+		IFEQ	GAMEBOY_USERS
+		bra.l	timer_replan
+		ENDIF
+		ENDIF
 		rts
 
 		cnop	0,4
-irq_protect_ff:	or.b	#%11100000,d6
-;		cmp.b	(a2,d7.l),d6
-;		beq.s	irq_protect_ff_exit
+timc_protect:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		move.w	timer_bit,-(SP)
+		bsr.l	timer_configure
+		or.b	#$f8,d6
 		move.b	d6,(a2,d7.l)
-;		tst.b	i_flag
-;		beq.s	irq_protect_ff_wowza
-irq_protect_ff_exit:
-		rts
-
-		cnop	0,4
-irq_protect_ff_wowza:
-		move.l	a5,z80_cycles_left		;CHECK THIS ONE OUT WITH
-		move.b	#1,z80_ei_return		;KIRBY 2!!!
-		move.l	#1,a5
-;		bchg.b	#1,$bfe001
-		rts
-
-		cnop	0,4
-timc_protect:	or.b	#%11111000,d6
+		move.w	(SP)+,d6
+		and.w	sound_div_counter,d6
+		beq.s	timer_control_done
+		move.w	timer_bit,d6
+		and.w	sound_div_counter,d6
+		bne.s	timer_control_done
+		bsr.l	timer_extra_tick
+timer_control_done:
+		bra.l	timer_replan
+		ENDIF
+		ENDIF
+		or.b	#%11111000,d6
 		move.b	d6,(a2,d7.l)
 		rts
 
+		IFEQ	Z80_MODE
+timer_write_count:
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		cmp.b	#2,timer_phase
+		beq.s	timer_count_done
+		clr.b	timer_phase
+		move.b	d6,$ff05(a2)
+		bra.l	timer_replan
+timer_count_done:
+		rts
+		ELSE
+		bra.w	gb_mem_wr
+		ENDIF
+timer_write_modulo:
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		move.b	d6,$ff06(a2)
+		cmp.b	#2,timer_phase
+		bne.s	timer_modulo_done
+		move.b	d6,$ff05(a2)
+		bra.l	timer_replan
+timer_modulo_done:
+		rts
+		ELSE
+		bra.w	gb_mem_wr
+		ENDIF
+		ENDIF
+
 		cnop	0,4
-clear_divider:	move.b	#0,(a2,d7.l)
+clear_divider:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_reset
+		move.b	#0,(a2,d7.l)
+		bra.l	timer_replan
+		ENDIF
+		ENDIF
+		move.b	#0,(a2,d7.l)
 		rts
 
 		cnop	0,4
@@ -562,60 +660,55 @@ do_joystick:
 		bsr.w	debug_joypad_wanted
 		ENDIF
 
-		cmp.b	#$03,d6				;type request?
-		beq.s	do_joystick_type_request	;yes.
-
-		btst	#5,d6
-		beq.s	do_joystick_but
-		btst	#4,d6
-		beq.s	do_joystick_dir
-
-		or.b	#%00001111,d6			;both keylines are disabled.
-		move.b	d6,(a2,d7.l)
+		move.l	a6,-(SP)
+		lea	(a2,d7.l),a6
+		cmp.b	#$03,d6				;legacy Game Boy type probe.
+		beq.s	do_joystick_type_request
+		bsr.s	joypad_update
+		move.l	(SP)+,a6
 		rts
 
-		cnop	0,4
-do_joystick_but:btst	#4,d6
-		beq.s	do_joystick_both
-
-		move.l	d5,-(SP)
-		move.b	buttons_byte,d5
-		and.b	#%11110000,d6
-		and.b	#%00001111,d5
-		or.b	d6,d5
-		move.b	d5,(a2,d7.l)
-		move.l	(SP)+,d5
-		rts
-
-		cnop	0,4
 do_joystick_type_request:
-		move.b	#$f0,d6				;normal gameboy.
-
-do_joystick_both:
-		movem.l	d5/d4,-(SP)
-		move.b	directions_byte,d4
-		move.b	buttons_byte,d5
-		eor.b	#%11111111,d4
-		eor.b	#%11111111,d5
-		and.b	#%11110000,d6
-		or.b	d4,d5
-		or.b	d6,d5
-		eor.b	#%00001111,d5
-		move.b	d5,(a2,d7.l)
-		movem.l	(SP)+,d5/d4
+		move.l	d7,-(SP)
+		move.b	#$c0,d6
+		bsr.s	joypad_lines
+		or.b	#$30,d6
+		move.b	d6,(a6)
+		move.l	(SP)+,d7
+		move.l	(SP)+,a6
 		rts
 
-		cnop	0,4
-do_joystick_dir:btst	#5,d6
-		beq.s	do_joystick_both
+; Compare the visible active-low lines, not the raw host input bytes.
+; A falling edge requests IF even when IE masks the interrupt.
+joypad_update:	move.l	d7,-(SP)
+		bsr.s	joypad_lines
+		move.b	(a6),d7
+		move.b	d6,(a6)
+		not.b	d6
+		and.b	d7,d6
+		move.l	(SP)+,d7
+		and.b	#$0f,d6
+		beq.s	joypad_update_done
+		bset.b	#4,$0f(a6)
+		IFGT	GAMEBOY_DEBUG
+		jmp	debug_p10
+		ENDIF
+joypad_update_done:
+		rts
 
-		move.l	d5,-(SP)
-		move.b	directions_byte,d5
-		and.b	#%11110000,d6
-		and.b	#%00001111,d5
-		or.b	d6,d5
-		move.b	d5,(a2,d7.l)
-		move.l	(SP)+,d5
+joypad_lines:	or.b	#$0f,d6
+		btst	#5,d6
+		bne.s	joypad_directions
+		move.b	buttons_byte,d7
+		or.b	#$f0,d7
+		and.b	d7,d6
+joypad_directions:
+		btst	#4,d6
+		bne.s	joypad_lines_done
+		move.b	directions_byte,d7
+		or.b	#$f0,d7
+		and.b	d7,d6
+joypad_lines_done:
 		rts
 
 		cnop	0,4
@@ -1102,6 +1195,9 @@ reti_back:	tst.b	i_flag
 		clr.b	z80_halt_bug
 		subq.l	#1,a0					;EI; HALT returns to HALT.
 reti_stack_pc:
+		IFEQ	Z80_MODE
+		subq.l	#5,a5
+		ENDIF
 		move.l	a0,d6					;stack the pc.
 		sub.l	z80_pc_base,d6
 		move.b	#1,i_flag				;disable interrupts.
@@ -1207,14 +1303,57 @@ irq_iv:		bclr.b	#3,(a6)
 ;		misc memory reads
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+; Only FULL RAM data reads need an I/O bus check; ROM reads stay direct.
+; The last argument is the number of M-cycles after the read in the opcode.
+READ_RAM_BYTE:	MACRO
+		IFEQ	Z80_MODE
+		cmp.w	#$ff04,\1
+		blo.s	read_ram_raw\@
+		cmp.w	#$ff40,\1
+		bhs.s	read_ram_raw\@
+		move.w	\1,d6
+		IFGT	\3
+		addq.l	#\3,a5
+		ENDIF
+		bsr.l	cpu_timed_read
+		IFGT	\3
+		subq.l	#\3,a5
+		ENDIF
+		move.b	d6,\2
+		bra.s	read_ram_done\@
+read_ram_raw\@:
+		ENDIF
+		move.b	(a2,\1.l),\2
+read_ram_done\@:
+		ENDM
+
 READ_D2_TO_D6:	MACRO
 		tst.w	d2
 		blt.s	read_to_\@
 		move.b	(a3,d2.l),d6
 		bra.s	read_to_exit_\@
 		cnop	0,4
-read_to_\@:	move.b	(a2,d2.l),d6
+read_to_\@:	READ_RAM_BYTE d2,d6,\1
 read_to_exit_\@:	
+		ENDM
+
+READ_RAM_STACK:	MACRO
+		IFEQ	Z80_MODE
+		cmp.w	#$ff03,d5
+		blo.s	read_stack_raw\@
+		cmp.w	#$ff40,d5
+		bhs.s	read_stack_raw\@
+		addq.l	#\2,a5
+		bsr.l	cpu_timed_stack
+		IFGT	\2-1
+		subq.l	#\2-1,a5
+		ENDIF
+		move.w	d6,\1
+		bra.s	read_stack_done\@
+read_stack_raw\@:
+		ENDIF
+		move.w	(a2,d5.l),\1
+read_stack_done\@:
 		ENDM
 
 READW_D5_TO_D7:	MACRO
@@ -1223,6 +1362,11 @@ READW_D5_TO_D7:	MACRO
 		move.w	(a3,d5.l),d7
 		bra.s	readw_to_exit_\@
 		cnop	0,4
-readw_to_\@:	move.w	(a2,d5.l),d7
+readw_to_\@:
+		IFEQ	Z80_MODE
+		READ_RAM_STACK d7,\1
+		ELSE
+		move.w	(a2,d5.l),d7
+		ENDIF
 readw_to_exit_\@:	
 		ENDM

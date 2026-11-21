@@ -1,15 +1,15 @@
 @database "Wzonka-Lad Guide"
 @master "Wzonka-Lad Guide"
-@$VER: Wzonka-Lad Guide 1.11.00 (19.11.2026)
+@$VER: Wzonka-Lad Guide 1.12.00 (21.11.2026)
 @author "Ville Helin"
 @(c) "Ville Helin 1996-1999"
 
-@node "main" "Wzonka-Lad v1.11.00 - The Game Boy Fan Software Test Platform"
+@node "main" "Wzonka-Lad v1.12.00 - The Game Boy Fan Software Test Platform"
 @toc "main"
 
           @{b}Before Starting...@{ub}
 
-          @{" ABOUT 1.11.00! READ ME!   " link "aboutw"}
+          @{" ABOUT 1.12.00! READ ME!   " link "aboutw"}
 
           @{" Requirements              " link "req"}  @{" Installing                " link "inst"}
           @{" Debugging                 " link "debug"}
@@ -77,7 +77,7 @@
 
 @endnode
 
-@node "aboutw" "About version 1.11.00"
+@node "aboutw" "About version 1.12.00"
 @toc "main"
 
   Wzonka-Lad emulates Game Boy (DMG), and is meant for the people who wish
@@ -141,7 +141,7 @@
   preferred AHI output devices and settings. Without the keyfile the
   window cannot be accessed and the sounds are not emulated.
 
-  You'll also get a chance to use CD³² and SEGA pads, more than
+  You'll also get a chance to use CDï¿½ï¿½ and SEGA pads, more than
   three XPK libraries, GBS loading and saving and GameGenie (tm)
   patch codes when you register!
 
@@ -711,7 +711,7 @@
     memory accesses is divided by ~seven).
   - GB-Z80 instruction timings 100% supported.
 
-  - Uses optionally Sega ControlPad Library, Copyright ©1995 by Joseph
+  - Uses optionally Sega ControlPad Library, Copyright ï¿½1995 by Joseph
     Carlson and Randall Richards <xrichard@csu.fullerton.edu>.
 
 @endnode
@@ -723,8 +723,8 @@
 
   Jarkko Vatjus-Anttila, Marcel de Kogel, Marat Fayzyllin, Chaos-Knight,
   Hans Guijt, Morgan Johansson, Brothers Sandgren, Luca Longone,
-  Lennart Johannesson, Paul Barker, Jon Åslund, Jeff Frohwein, Sampo Kytömäki,
-  Sebastian Schlesinger, D. Domínguez, Jussi Lindgren, Mr. A, Mr. B, Tim Favro,
+  Lennart Johannesson, Paul Barker, Jon ï¿½slund, Jeff Frohwein, Sampo Kytï¿½mï¿½ki,
+  Sebastian Schlesinger, D. Domï¿½nguez, Jussi Lindgren, Mr. A, Mr. B, Tim Favro,
   Noca$h, Rodnay Zaks, Joona Palaste and all those unlukcy people I've
   forgotten. I have a bad memory. ;)
 
@@ -739,7 +739,7 @@
   technology at the Helsinki University of Technology.
 
   Stuff used for developement: A1200/030/50MHz (+FPU) + 16MB'S OF FAST
-                               + 400MB HD + CD³² JOYPAD + "DRACULA X" -
+                               + 400MB HD + CDï¿½ï¿½ JOYPAD + "DRACULA X" -
                                AUDIO CD ;) + LOADS OF ANIME TAPES + WINUAE.
 
   NOTE! UNCOUNTED ANIME TAPES WERE WATCHED DURING THE TIME WHICH SHOULD HAVE
@@ -1002,6 +1002,46 @@
 
 @node "history" "History"
 @toc "main"
+
+  v1.12.00 (21-Nov-2026):
+
+    * Joypad interrupts follow falling edges on the selected Game Boy input
+      lines, avoiding a spurious request in Blargg's halt bug test
+    * FULL checks for pending interrupts after a write to IF or IE, before
+      fetching the next opcode. This addresses Blargg's CPU interrupt case 02
+    * The CGB speed-switch register (KEY1) reads as $FF in DMG emulation,
+      preventing Blargg's CPU test 03 from getting stuck in STOP
+    * DMG sound length counters now survive NR52 power cycles and accept
+      length-only writes while the APU is off (Blargg sound tests 08 and 11)
+    * DMG audio registers now return the hardware read masks (Blargg sound
+      test 01). Write-only values are retained for playback and GBS snapshots
+    * DMG audio register writes and length counters keep working when AHI is
+      unavailable, sound is off, or individual playback channels are muted
+    * FULL clocks DMG sound lengths from the emulated divider, including
+      DIV resets, and handles the extra length clocks on enable and trigger
+      writes. FAST and WARP retain scanline-based length timing
+    * FULL clocks channel 1 frequency sweep from the same divider as length,
+      even with host audio muted. Sweep pace reloads and negate-mode changes
+      now follow DMG hardware (Blargg sound tests 05 and 07)
+    * FULL emulates active DMG wave RAM reads, writes and retrigger corruption
+      (Blargg sound tests 09, 10 and 12). Wave timing is calculated on demand;
+      FAST and WARP keep their existing wave RAM behavior
+    * FULL advances TIMA from the emulated divider, not from scanline sweeps.
+      Timer reloads and IRQs now occur even when masked in IE. This fixes
+      the timer calibration failure in Blargg's instruction timing test.
+    * FULL charges five machine cycles for interrupt entry, whether the IRQ
+      is accepted inside a CPU slice or by the scanline scheduler.
+    * DMG startup recreates the boot logo tiles and map, mirrors WRAM into
+      Echo RAM, and returns $FF from unused I/O, including $FF50.
+      Cold boot now fills WRAM with a varied pattern without overwriting
+      cartridge save RAM.
+    * FULL starts with the DMG divider phase and the end of VBlank. Scanlines
+      budget 114 machine cycles at default speed and carry instruction overrun
+      into the next slice.
+    * Keep the display blank while LCDC is off and through the first frame
+      after re-enabling it, without suppressing guest VBlank or CPU timing.
+    * Poll host controllers at even intervals across frame boundaries, so
+      joypad interrupts aren't locked to a few scanlines (Telling LYs test).
 
   v1.11.00 (19-Nov-2026):
 
@@ -1327,7 +1367,7 @@
   illegal to spread them.
 
   v0.95 (16-Nov-1997)
-  Fixed some amigaguide bugs, thanks to D. Domínguez for the report. Added
+  Fixed some amigaguide bugs, thanks to D. Domï¿½nguez for the report. Added
   a Spanish documentation made by the very same dude! Now the screenmode
   is updated if OS screen driver is activated and a new screenmode is
   selected. Speeded up the OS screen driver x/153 mode a lot!

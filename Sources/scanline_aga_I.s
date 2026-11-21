@@ -131,6 +131,10 @@ update_aga_palc:move.l	(a5)+,d7
 		moveq.l	#3-1,d6
 next_aga_col:	moveq.l	#0,d7
 		move.b	(a4)+,d7			;d7 = palette byte.
+		tst.b	lcd_blank_phase
+		beq.s	next_aga_col_ready
+		moveq.l	#0,d7
+next_aga_col_ready:
 		lsl.w	#4,d7
 		add.l	d7,a5
 

@@ -22,81 +22,42 @@ I take no responsibility for anything.
 
 2. CHANGELOG (RECENT)
 
-v1.11.00 (19-Nov-2026):
+v1.12.00 (21-Nov-2026):
 
-* AGA Full packs background tiles in groups of four and simplifies
-  scanline sprite selection and placement
-* AGA Full writes each Game Boy window byte once per bitplane.
-  Shifted windows read the background only at the two edges
-* AGA x/153 copies background and Game Boy window data two rows at a
-  time, skips clean sprite rows in groups of four, and shares sprite
-  merging across all flip combinations
-* AGA x/153 batches bulk background clears and stays within the
-  allocated bitmap when the background or LCD is disabled
-* Both AGA refresh modes batch sprite-plane clears and merge sprite
-  words in registers to reduce bitplane reads and writes
-* OS Screen and Scalable Window convert each nonempty sprite row with two
-  lookups in a 64 KiB table. Both refresh modes retain live sprite palettes,
-  transparency and background/sprite priority
-* OS Screen and Scalable Window share faster planar drawing. Full batches
-  sprite clears, simplifies sprite selection, and writes each Game Boy
-  window byte once per plane without spilling into the next row. x/153
-  packs background tiles into aligned 32-bit writes, skips clean sprite
-  rows in groups of four, and clears marked rows with batched stores
-* AGA Full, OS Screen and Scalable Window pack aligned Game Boy window
-  pixels into 32-bit bitplane stores. OS Screen and Scalable Window x/153
-  now stream window rows, reading the destination only at shifted edges
-* Scalable Window uses lookup tables, wider copy loops and repeat-row
-  reuse to reduce scaling work. Native-width output skips horizontal
-  scaling; 320x144 and 320x288 have dedicated routines
-* Misc settings includes optional Direct Window readback.
-* Number keys 1-9 resize the active Scalable Window's width; Shift+1-9
-  sets its height
-* An optional EClock build profiles Window and AGA drawing and writes
-  the results to T:Wzonka-GFX.txt on pause
-* Native Screen modes such as Lowres use planar output even when
-  CyberGraphX is installed. OS screen speed limit also works on RTG screens
-* Noise uses a shift-register pattern. The normal loop is 32767
-  steps and the short metallic mode is 127. The sample changes
-  only when that mode changes
-* Wave samples use the whole 4-bit range, so a value of 15
-  reaches full scale
-* Master-volume (NR50) writes no longer overwrite the volume with channel
-  routing (NR51), fixing music fade-out hangs
-* All sound modes apply the separate left/right NR50 levels and correct
-  NR51 stereo routing. NR50 level zero is quiet, not completely muted
-* Pulse and wave playback rates retain fractional-tone precision without
-  18-bit wrapping. Noise uses the correct LFSR clock rate; NR43 shifts 14
-  and 15 stop the noise clock
-* Prevent Amiga lockups with AHI: pause ultrasonic playback rates >=
-  1048576 Hz that overflow its mixer. Game Boy sound registers,
-  channel status and timers are unaffected
-* y Hz mode tracks triggers, DAC power, length timers and NR52 channel
-  status without making AHI calls between its selected output updates
-* Sound-register writes cannot revive a channel stopped by its DAC,
-  length timer or sweep. Envelope writes no longer restart the envelope
-* High mode checks sweep overflow on trigger without changing pitch early,
-  and checks overflow again after each frequency update
-* Pulse-duty changes preserve the emulated CPU flags. Restarting audio
-  resets sample caches and restores active note volumes from registers
-* Powering off sound also clears master routing, volume and internal pitch
-* FULL CPU mode writes stack pairs directly in high RAM and work RAM,
-  preserving echo RAM and using byte handlers at I/O and memory boundaries
-* Interrupt dispatch masks IF with IE before choosing the highest-priority
-  request, including the EI and RETI paths
-* HALT resumes when an enabled interrupt becomes pending even with IME off,
-  without servicing that interrupt. STOP is left halted
-* EI enables interrupts after the following instruction in all CPU modes.
-  DI cancels a pending EI, and the following instruction's cycles are
-  counted. EI/HALT and EI/RETI preserve the correct interrupt state
-* The HALT bug's suppressed PC increment survives a CPU sweep boundary,
-  including debug builds
-* ADD SP,x and LD HL,SP+x set C from the unsigned low-byte addition.
-  The full core also sets H from bit 3 and clears N and Z
-* ADD HL,HL stores a literal H flag in the full core, rather than a
-  deferred flag based on stale operands
-* CCF clears H and N in the full core while preserving Z and complementing C
-* DAA handles every A/N/H/C input combination in the full core, preserves
-  N, clears H, and sets Z from the adjusted accumulator
-* Corrected cycle counts in both cores for JR, JP, CALL, RET, RETI, RST
-  and BIT n,(HL), including taken and untaken conditional paths
+* Joypad interrupts follow falling edges on the selected Game Boy input
+  lines, avoiding a spurious request in Blargg's halt bug test
+* FULL checks for pending interrupts after a write to IF or IE, before
+  fetching the next opcode. This addresses Blargg's CPU interrupt case 02
+* The CGB speed-switch register (KEY1) reads as $FF in DMG emulation,
+  preventing Blargg's CPU test 03 from getting stuck in STOP
+* DMG sound length counters now survive NR52 power cycles and accept
+  length-only writes while the APU is off (Blargg sound tests 08 and 11)
+* DMG audio registers now return the hardware read masks (Blargg sound
+  test 01). Write-only values are retained for playback and GBS snapshots
+* DMG audio register writes and length counters keep working when AHI is
+  unavailable, sound is off, or individual playback channels are muted
+* FULL clocks DMG sound lengths from the emulated divider, including
+  DIV resets, and handles the extra length clocks on enable and trigger
+  writes. FAST and WARP retain scanline-based length timing
+* FULL clocks channel 1 frequency sweep from the same divider as length,
+  even with host audio muted. Sweep pace reloads and negate-mode changes
+  now follow DMG hardware (Blargg sound tests 05 and 07)
+* FULL emulates active DMG wave RAM reads, writes and retrigger corruption
+  (Blargg sound tests 09, 10 and 12). Wave timing is calculated on demand;
+  FAST and WARP keep their existing wave RAM behavior
+* FULL advances TIMA from the emulated divider, not from scanline sweeps.
+  Timer reloads and IRQs now occur even when masked in IE. This fixes
+  the timer calibration failure in Blargg's instruction timing test.
+* FULL charges five machine cycles for interrupt entry, whether the IRQ
+  is accepted inside a CPU slice or by the scanline scheduler.
+* DMG startup recreates the boot logo tiles and map, mirrors WRAM into
+  Echo RAM, and returns $FF from unused I/O, including $FF50.
+  Cold boot now fills WRAM with a varied pattern without overwriting
+  cartridge save RAM.
+* FULL starts with the DMG divider phase and the end of VBlank. Scanlines
+  budget 114 machine cycles at default speed and carry instruction overrun
+  into the next slice.
+* Keep the display blank while LCDC is off and through the first frame
+  after re-enabling it, without suppressing guest VBlank or CPU timing.
+* Poll host controllers at even intervals across frame boundaries, so
+  joypad interrupts aren't locked to a few scanlines (Telling LYs test).

@@ -514,19 +514,13 @@ scan_window:	move.l	lcd_control,d3			;d3 = lcd control byte.
 		beq.w	scan_draw_wxt			;nope.
 		btst	#0,d3
 		beq.w	scan_draw_wxt
+		tst.b	window_y_latched
+		beq.w	scan_draw_wxt
 
 		move.l	gb_memory,a0			;a0 = the fixed 16bit
-		move.l	a0,a2
-
-		moveq.l	#0,d0
-		add.l	#$ff4a,a2			;a2 = window y position.
-		move.b	(a2)+,d0			;d0 = window y pos ($ff4A).
-		move.l	gb_scanlines,d2			;d2 = the current scanline.
-		cmp.w	d0,d2
-		blt.w	scan_draw_wxt			;window not achieved, yet.
 
 		moveq.l	#0,d1
-		move.b	(a2),d1				;d1 = window x pos ($ff4B).
+		move.b	$ff4b(a0),d1			;d1 = window x pos ($ff4B).
 		subq.w	#7,d1				;x position fix.
 		bge.s	win_win_ok
 		clr.w	d1
@@ -544,13 +538,13 @@ win_win_ok:	cmp.w	#160,d1
 ;		INPUT:
 ;		a0	= window tiles.
 ;		a1	= window tile pattern table.
-;		d0	= window y position.
 ;		d1	= window x position.
-;		d2	= gb scanline.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		move.l	d2,d3
-		sub.l	d0,d2				;d2 = delta y in window.
+		move.l	gb_scanlines,d3
+		moveq.l	#0,d2
+		move.b	window_y_row,d2
+		subq.w	#1,d2				;counter already advanced for this line.
 		move.l	d2,d6				;d6 = y in window.
 		move.l	d1,d7				;d7 = window x position.
 		lsr.w	#3,d6				;d6 = y in bytes.

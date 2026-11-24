@@ -3735,10 +3735,12 @@ mem_rest_I:	move.l	(a0)+,(a1)+
 		tst.b	$ff40-$10000(a1)
 		spl	lcd_blank_phase		;legacy snapshots do not store LCD warm-up.
 		clr.b	lcd_blank_presented
+		clr.w	window_y_state		;legacy snapshots restart at scanline zero.
 		bsr.w	dmg_unmapped_io
 		bsr.w	dmg_mirror_wram
 		bsr.w	sound_import_regs
 		IFEQ	Z80_MODE
+		clr.b	lcd_start_line
 		bsr.l	sound_div_rebase
 		ENDIF
 
@@ -3844,6 +3846,9 @@ gbs_save_encode:move.l	key_file,d0
 		bsr.w	pull_z80
 		move.l	a0,d7
 		sub.l	z80_pc_base,d7
+		IFEQ	Z80_MODE
+		and.l	#$ffff,d7
+		ENDIF
 
 		move.l	snapshot_area,a0
 		move.b	z80_halt,(a0)+
@@ -9024,14 +9029,50 @@ dmg_boot_wram:	move.l	d1,d4
 ;		the gameboy loop
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-cartridge_loop:	
+lcd_slice_mode:	macro
+		and.b	#$fc,$41(a6)
+		move.l	h_values_indexed,a5
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		moveq.l	#0,d6
+		tst.b	lcd_blank_phase
+		bmi.s	lcd_mode_set\@
+		IFGT	\1
+		tst.b	lcd_start_line
+		bne.s	lcd_mode_set\@
+		ENDIF
+		ENDIF
+		ENDIF
+		move.b	(a5),d6
+lcd_mode_set\@:	or.b	d6,$41(a6)
+		endm
+
+lcd_restart_check: macro
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		tst.b	lcd_start_line
+		bmi.w	lcd_restart
+		ENDIF
+		ENDIF
+		endm
+
+cartridge_loop:
 		IFGT	GAMEBOY_DEBUG
 		clr.b	debug_exit
 		ENDIF
 
-		move.l	#h_values,h_values_indexed
 		bsr.w	pull_z80			;pull all the registers.
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		tst.b	lcd_start_line
+		bpl.s	lcd_frame_start
+lcd_restart:	move.b	#1,lcd_start_line
+		clr.b	irq_status_flags
+		ENDIF
+		ENDIF
 
+lcd_frame_start:
+		move.l	#h_values,h_values_indexed
 		move.l	a2,a6
 		add.l	#$ff00,a6
 		clr.l	gb_scanlines			;start from scanline zero.
@@ -9042,6 +9083,10 @@ next_sline:
 		bsr.w	debug_scanline_out
 		ENDIF
 
+		tst.b	old_refresh
+		bne.s	no_window_y_check
+		bsr.w	window_y_check
+no_window_y_check:
 		IFLE	Z80_MODE
 
 		cmp.l	#1,gb_scanlines
@@ -9054,6 +9099,12 @@ next_sline:
 
 cmp_blank:	btst.b	#7,$40(a6)			;lcd enabled?
 		beq.s	cmp_up				;no.
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		tst.b	lcd_start_line
+		bne.s	cmp_up				;no coincidence on the LCD startup line.
+		ENDIF
+		ENDIF
 
 		btst.b	#1,irq_status_flags		;vbr effect?
 		beq.s	cmp_blank_no_filtering
@@ -9118,11 +9169,7 @@ no_timer_update_0:
 		ENDIF
 		ENDIF
 
-		and.b	#%11111100,$41(a6)
-
-		move.l	h_values_indexed,a5
-		move.b	(a5),d6
-		or.b	d6,$41(a6)
+		lcd_slice_mode 1
 
 		IFLE	Z80_MODE
 
@@ -9149,6 +9196,7 @@ no_lcd_irq_emulation_0:
 vbr_blank:	btst.b	#7,$40(a6)			;lcd operation?
 		beq.s	no_vbr_blank			;no. quit.
 
+		clr.w	window_y_state
 		bsr.w	lcd_blank_vblank
 		btst.b	#0,$ff(a6)			;vbr irq?
 		beq.s	no_vbr_blank			;no. quit.
@@ -9191,9 +9239,10 @@ dehalting_z80_0:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_0
 
-no_interrupts_0:bsr.l	z80_run_slice
+no_interrupts_0:bsr.l	z80_run_slice_first
 
 no_ei_return_0:
+		lcd_restart_check
 		IFGT	GAMEBOY_DEBUG
 		tst.b	debug_exit
 		bne.w	z80_halted
@@ -9279,11 +9328,8 @@ no_transfer:
 		add.b	#1,$04(a6)
 		ENDIF
 		ENDIF
-		and.b	#%11111100,$41(a6)
 
-		move.l	h_values_indexed,a5
-		move.b	(a5),d6
-		or.b	d6,$41(a6)
+		lcd_slice_mode 0
 
 		IFLE	Z80_MODE
 		cmp.l	#144,gb_scanlines
@@ -9332,6 +9378,7 @@ dehalting_z80_1:move.l	a0,d6				;stack the pc.
 no_interrupts_1:bsr.l	z80_run_slice
 
 no_ei_return_1:
+		lcd_restart_check
 		IFGT	GAMEBOY_DEBUG
 		tst.b	debug_exit
 		bne.w	z80_halted
@@ -9356,10 +9403,7 @@ no_timer_update_2:
 		ENDIF
 		ENDIF
 
-		and.b	#%11111100,$41(a6)
-		move.l	h_values_indexed,a5
-		move.b	(a5),d6
-		or.b	d6,$41(a6)
+		lcd_slice_mode 0
 
 		move.b	$0f(a6),d7
 		and.b	$ff(a6),d7			;IE & IF.
@@ -9392,23 +9436,27 @@ dehalting_z80_2:move.l	a0,d6				;stack the pc.
 
 		bra.w	prior_v_2
 
-no_interrupts_2:bsr.l	z80_run_slice
+no_interrupts_2:bsr.l	z80_run_slice_transfer
 
 no_ei_return_2:
+		lcd_restart_check
 		IFGT	GAMEBOY_DEBUG
 		tst.b	debug_exit
 		bne.w	z80_halted
 		ENDIF
 
 cpu_halt_is_on_2:
+		tst.b	old_refresh			;144/144 mode?
+		bne.s	frame_draw_2
+		bsr.w	window_y_advance
 		tst.b	lcd_blank_phase
 		bne.w	lcd_blank_output
-		tst.b	old_refresh			;144/144 mode?
-		bne.s	no_144_144_2			;no.
 		bsr.w	scanline_draw			;yes. draw a scanline.
 		bra.s	xan_drawed_2
 
-no_144_144_2:	move.l	gb_scanlines,d7
+frame_draw_2:	tst.b	lcd_blank_phase
+		bne.w	lcd_blank_output
+		move.l	gb_scanlines,d7
 		cmp.b	refresh_scanline,d7
 		bne.s	xan_drawed_2
 
@@ -9444,11 +9492,8 @@ no_timer_update_3:
 		add.b	#1,$04(a6)
 		ENDIF
 		ENDIF
-		and.b	#%11111100,$41(a6)
 
-		move.l	h_values_indexed,a5
-		move.b	(a5),d6
-		or.b	d6,$41(a6)
+		lcd_slice_mode 0
 
 		IFLE	Z80_MODE
 		cmp.l	#144,gb_scanlines
@@ -9497,6 +9542,7 @@ dehalting_z80_3:move.l	a0,d6				;stack the pc.
 no_interrupts_3:bsr.l	z80_run_slice
 
 no_ei_return_3:
+		lcd_restart_check
 		IFGT	GAMEBOY_DEBUG
 		tst.b	debug_exit
 		bne.w	z80_halted
@@ -9521,11 +9567,7 @@ no_timer_update_4:
 		ENDIF
 		ENDIF
 
-		and.b	#%11111100,$41(a6)
-
-		move.l	h_values_indexed,a5
-		move.b	(a5),d6
-		or.b	d6,$41(a6)
+		lcd_slice_mode 0
 
 		move.b	$0f(a6),d7
 		and.b	$ff(a6),d7			;IE & IF.
@@ -9561,6 +9603,7 @@ dehalting_z80_4:move.l	a0,d6				;stack the pc.
 no_interrupts_4:bsr.l	z80_run_slice_last
 
 no_ei_return_4:
+		lcd_restart_check
 		IFGT	GAMEBOY_DEBUG
 		tst.b	debug_exit
 		bne.w	z80_halted
@@ -9598,6 +9641,13 @@ next_scanline:	move.l	a2,a6
 		add.l	#$ff00,a6
 
 		and.b	#%10,irq_status_flags		;clear oam and lyc flag.
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		clr.b	lcd_start_line
+		btst.b	#7,$40(a6)
+		beq.w	next_sline
+		ENDIF
+		ENDIF
 		move.b	d7,$44(a6)			;next scanline (address).
 		bra.w	next_sline			;next horizontal line.
 
@@ -9622,6 +9672,38 @@ lcd_blank_frame_end:
 		clr.b	lcd_blank_phase
 		clr.b	lcd_blank_presented
 lcd_blank_frame_done:
+		rts
+
+; Latch WY at the start of a visible line, before the guest can change it
+; in that line's STAT handler. DMG does not require an enabled window.
+window_y_check:
+		tst.b	window_y_latched
+		bne.s	window_y_check_done
+		move.l	gb_scanlines,d7
+		cmp.b	#144,d7
+		bhs.s	window_y_check_done
+		cmp.b	$4a(a6),d7
+		bne.s	window_y_check_done
+		btst.b	#7,$40(a6)
+		beq.s	window_y_check_done
+		st	window_y_latched
+window_y_check_done:
+		rts
+
+; Count guest window lines even when the host skips or blanks the image.
+window_y_advance:
+		tst.b	window_y_latched
+		beq.s	window_y_advance_done
+		cmp.l	#144,gb_scanlines
+		bhs.s	window_y_advance_done
+		move.b	$ff40(a2),d7
+		and.b	#$a1,d7
+		cmp.b	#$a1,d7
+		bne.s	window_y_advance_done
+		cmp.b	#167,$ff4b(a2)
+		bhs.s	window_y_advance_done
+		addq.b	#1,window_y_row
+window_y_advance_done:
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -10016,6 +10098,57 @@ sound_length_silence_exit:
 		rts
 
 		IFEQ	Z80_MODE
+; LCD-on ends the old slice at the write, without resetting DIV/TIMA.
+lcd_start_request:
+		st	lcd_start_line
+		tst.b	sound_div_active
+		beq.s	lcd_start_request_done
+		bsr.l	sound_div_sync
+		clr.l	sound_slice_tail
+		clr.l	sound_div_budget
+		sub.l	a5,a5
+		cmp.b	#3,z80_ei_return
+		beq.s	lcd_start_irq_check
+		tst.b	z80_ei_return
+		beq.s	lcd_start_request_done
+		move.l	#1,z80_cycles_left	;finish_ei removes its temporary cycle.
+lcd_start_request_done:
+		rts
+lcd_start_irq_check:
+		clr.l	z80_cycles_left
+		rts
+
+; The timed-read caller has already debited the bus cycle. Project into
+; the next slice only if that cycle starts past the current boundary.
+lcd_stat_read:
+		tst.b	sound_div_active
+		beq.s	lcd_stat_read_raw
+		tst.b	lcd_blank_phase
+		bmi.s	lcd_stat_read_raw
+		move.l	a5,d6
+		add.l	sound_slice_tail,d6
+		tst.b	z80_ei_return
+		beq.s	lcd_stat_read_check
+		add.l	z80_cycles_left,d6
+		cmp.b	#3,z80_ei_return
+		beq.s	lcd_stat_read_check
+		subq.l	#1,d6
+lcd_stat_read_check:
+		cmp.l	#-1,d6
+		bge.s	lcd_stat_read_raw
+		move.l	h_values_indexed,d6
+		beq.s	lcd_stat_read_raw
+		move.l	d6,a6
+		moveq.l	#0,d6
+		move.b	$ff41(a2),d6
+		and.b	#$fc,d6
+		or.b	(a6),d6
+		rts
+lcd_stat_read_raw:
+		moveq.l	#0,d6
+		move.b	$ff41(a2),d6
+		rts
+
 ; At cartridge entry LY already reads 0, but the LCD is still in VBlank.
 ; Run the last 52 dots of line 153 before the first full scanline.
 dmg_boot_lcd_tail:
@@ -10028,6 +10161,15 @@ dmg_boot_lcd_tail:
 ; not on individual wave fetches or TIMA increments.
 sound_cpu_slice:
 		move.l	z80_cycles,d6
+		bra.s	sound_cpu_begin_slice
+; At normal speed: 20 / (22+21) / (22+29) M-cycles. The first
+; line after enabling LCD starts in mode 0 and is two M-cycles shorter.
+sound_cpu_lcd_first:
+		move.l	z80_cycles,d6
+		subq.l	#2,d6
+		tst.b	lcd_start_line
+		beq.s	sound_cpu_begin_slice
+		subq.l	#2,d6
 sound_cpu_begin_slice:
 		cmp.b	#1,z80_halt
 		beq.w	sound_cpu_done
@@ -10104,7 +10246,7 @@ sound_cpu_sync:	bsr.s	sound_div_sync
 		bpl.s	sound_cpu_tail
 		add.l	d6,sound_slice_tail
 sound_cpu_tail:	move.l	sound_slice_tail,d6
-		bgt.s	sound_cpu_run
+		bgt.w	sound_cpu_run
 sound_cpu_debt:	move.l	d6,z80_slice_debt
 sound_cpu_done:	rts
 
@@ -10174,12 +10316,16 @@ sound_frame_done:
 ; bulk, stopping only at overflows to account for the delayed reload.
 timer_advance:
 		tst.l	d6
-		beq.s	timer_advance_exit
-		movem.l	d0-d1/d6-d7,-(SP)
+		bne.s	timer_advance_nonzero
+		rts
+timer_advance_nonzero:
+		movem.l	d0-d1/d6-d7/a6,-(SP)
+		move.l	a2,a6
+		add.l	#$ff00,a6
 		cmp.b	#1,timer_phase
 		bne.s	timer_advance_clear
-		move.b	$ff06(a2),$ff05(a2)
-		bset.b	#2,$ff0f(a2)
+		move.b	$06(a6),$05(a6)
+		bset.b	#2,$0f(a6)
 		cmp.l	#4,d6
 		bne.s	timer_advance_clear
 		move.b	#2,timer_phase
@@ -10199,7 +10345,7 @@ timer_advance_edges:
 		beq.s	timer_advance_pop
 timer_advance_ticks:
 		moveq.l	#0,d0
-		move.b	$ff05(a2),d0
+		move.b	$05(a6),d0
 		move.w	#256,d1
 		sub.w	d0,d1
 		sub.w	d1,d6
@@ -10211,21 +10357,20 @@ timer_advance_ticks:
 		bne.s	timer_advance_reload
 		move.b	#2,timer_phase
 timer_advance_reload:
-		move.b	$ff06(a2),$ff05(a2)
-		bset.b	#2,$ff0f(a2)
+		move.b	$06(a6),$05(a6)
+		bset.b	#2,$0f(a6)
 		tst.w	d6
 		bne.s	timer_advance_ticks
 		bra.s	timer_advance_pop
 timer_advance_add:
 		add.w	d1,d6
-		add.b	d6,$ff05(a2)
+		add.b	d6,$05(a6)
 		bra.s	timer_advance_pop
 timer_advance_pending:
-		clr.b	$ff05(a2)
+		clr.b	$05(a6)
 		move.b	#1,timer_phase
 timer_advance_pop:
-		movem.l	(SP)+,d0-d1/d6-d7
-timer_advance_exit:
+		movem.l	(SP)+,d0-d1/d6-d7/a6
 		rts
 
 timer_div_edge:
@@ -10354,6 +10499,10 @@ sound_div_rebase:
 gb_memory_at_start:
 		clr.b	lcd_blank_phase
 		clr.b	lcd_blank_presented
+		clr.w	window_y_state
+		IFEQ	Z80_MODE
+		clr.b	lcd_start_line
+		ENDIF
 		move.l	gb_memory,a0
 		add.l	#$ff00,a0
 
@@ -11452,7 +11601,14 @@ prior_v_4:	bclr.b	#4,$0f(a6)
 ;		lcd interrupt
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-lcd_irq_eh:	tst.b	d6
+lcd_irq_eh:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		btst.b	#7,$40(a6)
+		beq.s	lcd_irq_quit
+		ENDIF
+		ENDIF
+		tst.b	d6
 		beq.s	lcd_h_blank
 		cmp.b	#1,d6
 		beq.s	lcd_v_blank
@@ -12870,7 +13026,16 @@ h_values:	dc.b	2,3,3,0,0
 		dc.b	1,1,1,1,1
 		dc.b	1,1,1,1,1
 		dc.b	1,1,1,1,1
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		dc.b	1,1,1,1,1
+		dc.b	2				;next frame's mode for an overrun read.
+		ELSE
 		dc.b	1,1,0,0,0
+		ENDIF
+		ELSE
+		dc.b	1,1,0,0,0
+		ENDIF
 		even
 
 h_values_indexed:
@@ -12878,8 +13043,15 @@ h_values_indexed:
 
 lcd_blank_phase: dc.b	0		;0 = visible, -1 = off, 1 = first frame, 2 = its VBlank.
 lcd_blank_presented: dc.b 0
+		IFEQ	Z80_MODE
+lcd_start_line:	dc.b	0		;-1 = restart pending, 1 = LCD startup line.
+		ENDIF
 visual_frame:	dc.b	0				;used buffer number.
 		even
+
+window_y_state:
+window_y_latched: dc.b	0
+window_y_row:	dc.b	0
 
 bitmap_bg:	dc.l	0				;planes 0 and 1 (c).
 bitmap_spc:	dc.l	0				;planes 2 and 3 (c).
@@ -16458,7 +16630,11 @@ list_default_structure:
 		dc.l	about_map,function_x/8*function_y*8,MEMF_CHIP!MEMF_CLEAR
 
 		dc.l	univ_gadget,gng_SIZEOF,MEMF_PUBLIC!MEMF_CLEAR
+		IFEQ	Z80_MODE
+		dc.l	gb_memory,$10002,MEMF_PUBLIC!MEMF_CLEAR
+		ELSE
 		dc.l	gb_memory,$10000,MEMF_PUBLIC!MEMF_CLEAR
+		ENDIF
 		dc.l	memory_banks,131072+XPK_MARGIN+$2000,MEMF_PUBLIC
 		dc.l	x_flip_table,$10000*2,MEMF_PUBLIC
 		dc.l	spr_col_table,64*256*4,MEMF_PUBLIC

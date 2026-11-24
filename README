@@ -61,3 +61,12 @@ v1.12.00 (21-Nov-2026):
   after re-enabling it, without suppressing guest VBlank or CPU timing.
 * Poll host controllers at even intervals across frame boundaries, so
   joypad interrupts aren't locked to a few scanlines (Telling LYs test).
+* Full GFX latches the Game Boy window when LY equals WY at the start
+  of a scanline and advances its tile row only when visible.
+* FULL restarts LCD timing on line zero after LCDC is re-enabled and
+  samples STAT mode at the CPU's I/O read cycle (STATcount-auto).
+  Mode 3 still uses a fixed baseline duration; sprite, window and
+  scroll stalls are not timed individually. FAST and WARP are unchanged.
+* FULL wraps instruction fetches at the 16-bit PC boundary. BullyGB can
+  display its failure report instead of staying blank on the unsupported
+  DMA bus-conflict test.

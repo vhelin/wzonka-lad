@@ -895,6 +895,12 @@ sound_wave_read_done:
 
 ; d6.w = address/result. Uses the same bus timing for timer and wave reads.
 cpu_timed_read:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		cmp.w	#$ff41,d6
+		beq.l	lcd_stat_read
+		ENDIF
+		ENDIF
 		cmp.w	#$ff30,d6
 		blo.s	cpu_timed_timer
 		cmp.w	#$ff40,d6

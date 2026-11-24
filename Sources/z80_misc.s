@@ -226,32 +226,21 @@ debug_joypad_wanted:
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 fetch_next_i:	MACRO
-;		jmp	jesus
 		move.l	a5,d6					;test cycles left.
 		ble.s	f_xit\@
 		IFGT	GAMEBOY_DEBUG
 		jmp	debug_output
 		ELSE
-		move.b	(a0)+,d7
-		lsl.w	#8,d7					;d7 = d7*256.
-		jmp	(a1,d7.l)				;jump and emulate.
-		ENDIF
-f_xit\@:	rts
-		ENDM
-
-
-jesus:		move.l	a5,d6					;test cycles left.
-		ble.s	f_xita
-
-		IFGT	GAMEBOY_DEBUG
-		jmp	debug_output
+		IFEQ	Z80_MODE
+		jmp	z80_fetch_linear
 		ELSE
 		move.b	(a0)+,d7
 		lsl.w	#8,d7					;d7 = d7*256.
 		jmp	(a1,d7.l)				;jump and emulate.
 		ENDIF
-
-f_xita:		rts
+		ENDIF
+f_xit\@:	rts
+		ENDM
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		z80 emulator, %1011 = znhc
@@ -300,6 +289,11 @@ z80_start:	move.l	bank_address,a0				;the rom area.
 		move.l	gb_memory,a2				;pointer to pseudo ram.
 		move.l	a0,a3					;a3 = base pointer.
 		move.l	a0,z80_pc_base
+		IFEQ	Z80_MODE
+; The longest instruction can read two operand bytes past $FFFF.
+; Every cached ROM bank view starts with the same fixed ROM bank.
+		move.w	(a3),$10000(a2)
+		ENDIF
 		lea	z80_optc_CB00,a4			;cbxx optcodes.
 		add.l	#$100,a0				;the beginning.
 
@@ -337,11 +331,29 @@ z80_cpu_next_sweep:
 		bra.w	z80_fetch_opcode
 		ENDIF
 
+z80_run_slice_first:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bra.l	sound_cpu_lcd_first
+		ENDIF
+		ENDIF
+		bra.s	z80_run_slice
+
+z80_run_slice_transfer:
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		move.l	z80_cycles,d6
+		subq.l	#1,d6
+		bra.l	sound_cpu_begin_slice
+		ENDIF
+		ENDIF
+		bra.s	z80_run_slice
+
 z80_run_slice_last:
 		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		move.l	z80_cycles,d6
-		addq.l	#4,d6				;four 22-cycle slices plus 26 = 114 M-cycles.
+		addq.l	#7,d6
 		bra.l	sound_cpu_begin_slice
 		ENDIF
 		ENDIF
@@ -361,6 +373,14 @@ cpu_slice_ei:	tst.b	z80_ei_return
 cpu_slice_done:	rts
 
 z80_fetch_opcode:
+		IFEQ	Z80_MODE
+		move.l	a0,d6
+		sub.l	z80_pc_base,d6
+		cmp.l	#$10000,d6
+		blo.s	z80_fetch_first_raw
+		bsr.s	z80_map_pc
+z80_fetch_first_raw:
+		ENDIF
 		move.b	(a0)+,d7
 		tst.b	z80_halt_bug
 		beq.s	z80_fetch_dispatch
@@ -369,6 +389,37 @@ z80_fetch_opcode:
 z80_fetch_dispatch:
 		lsl.w	#8,d7
 		jmp	(a1,d7.l)
+
+		IFEQ	Z80_MODE
+z80_fetch_linear:
+		move.l	a0,d6
+		sub.l	z80_pc_base,d6
+		cmp.l	#$10000,d6
+		bhs.s	z80_fetch_wrapped
+z80_fetch_linear_raw:
+		move.b	(a0)+,d7
+		lsl.w	#8,d7
+		jmp	(a1,d7.l)
+
+z80_fetch_wrapped:
+		bsr.s	z80_map_pc
+		bra.s	z80_fetch_linear_raw
+
+z80_map_pc:	and.l	#$ffff,d6
+		btst	#15,d6
+		beq.s	z80_map_pc_rom
+		move.l	a2,z80_pc_base
+		lea	(a2,d6.l),a0
+		rts
+z80_map_pc_rom:	move.l	a3,z80_pc_base
+		lea	(a3,d6.l),a0
+		rts
+
+; A bank write can occur after reading an operand across $FFFF.
+mbc_map_pc:	move.l	a0,d6
+		sub.l	z80_pc_base,d6
+		bra.s	z80_map_pc
+		ENDIF
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		push - command memory supervisor
@@ -469,8 +520,22 @@ lcd_mode_write:	lea	$ff40(a2),a6
 		btst.b	#7,(a6)
 		bne.s	lcd_mode_write_done
 		move.b	#1,lcd_blank_phase
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		move.b	d6,(a6)
+		bra.l	lcd_start_request
+		ENDIF
+		ENDIF
 		bra.s	lcd_mode_write_done
 lcd_mode_off:	st	lcd_blank_phase
+		clr.w	window_y_state
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		clr.b	lcd_start_line
+		clr.b	4(a6)
+		and.b	#$f8,1(a6)
+		ENDIF
+		ENDIF
 lcd_mode_write_done:
 		move.b	d6,(a6)
 		rts
@@ -481,6 +546,12 @@ lcd_protect:	lea	(a2,d7.l),a6
 		and.b	#%10000111,(a6)
 		or.b	d6,(a6)
 
+		IFEQ	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		btst.b	#7,$ff40(a2)
+		beq.s	lcd_write_no_irq
+		ENDIF
+		ENDIF
 		move.b	(a6),d6
 		and.b	#%11,d6
 		beq.s	lcd_write_irq
@@ -782,6 +853,9 @@ mbc1_rom_switch_in_limit:
 		move.l	d6,bank_address
 		move.l	d6,a3					;update rom pointer.
 
+		IFEQ	Z80_MODE
+		bra.l	mbc_map_pc
+		ELSE
 		sub.l	z80_pc_base,a0
 		move.w	a0,d7
 		blt.s	pc_in_ram_mbc1
@@ -792,6 +866,7 @@ mbc1_rom_switch_in_limit:
 		cnop	0,4
 pc_in_ram_mbc1:	add.l	a2,a0					;old ram address base.
 		rts
+		ENDIF
 
 		cnop	0,4
 mbc1_in_4_32:	rts
@@ -910,6 +985,9 @@ mbc2_rom_switch_in_limit:
 		move.l	d6,bank_address
 		move.l	d6,a3					;update rom pointer.
 
+		IFEQ	Z80_MODE
+		bra.l	mbc_map_pc
+		ELSE
 		sub.l	z80_pc_base,a0
 		move.w	a0,d7
 		blt.s	pc_in_ram_mbc2
@@ -920,6 +998,7 @@ mbc2_rom_switch_in_limit:
 		cnop	0,4
 pc_in_ram_mbc2:	add.l	a2,a0					;old ram address base.
 		rts
+		ENDIF
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		MBC5
@@ -950,6 +1029,9 @@ mbc5_romb0_switch_in_limit:
 		move.l	d6,bank_address
 		move.l	d6,a3
 
+		IFEQ	Z80_MODE
+		bra.l	mbc_map_pc
+		ELSE
 		sub.l	z80_pc_base,a0
 		move.w	a0,d7
 		blt.s	pc_in_ram_mbc5_0
@@ -961,6 +1043,7 @@ mbc5_romb0_switch_in_limit:
 pc_in_ram_mbc5_0:
 		add.l	a2,a0
 		rts
+		ENDIF
 
 		cnop	0,4
 mbc5_romb1:	move.b	d6,mbc5_rom_bank1
@@ -984,6 +1067,9 @@ mbc5_romb1_switch_in_limit:
 		move.l	d6,bank_address
 		move.l	d6,a3
 
+		IFEQ	Z80_MODE
+		bra.l	mbc_map_pc
+		ELSE
 		sub.l	z80_pc_base,a0
 		move.w	a0,d7
 		blt.s	pc_in_ram_mbc5_1
@@ -995,6 +1081,7 @@ mbc5_romb1_switch_in_limit:
 pc_in_ram_mbc5_1:
 		add.l	a2,a0
 		rts
+		ENDIF
 
 		cnop	0,4
 mbc5_ramb:	and.l	ram_banks_mask,d6
@@ -1067,6 +1154,9 @@ mbc3_rom_switch_in_limit:
 		move.l	d6,bank_address
 		move.l	d6,a3					;update rom pointer.
 
+		IFEQ	Z80_MODE
+		bra.l	mbc_map_pc
+		ELSE
 		sub.l	z80_pc_base,a0
 		move.w	a0,d7
 		blt.s	pc_in_ram_mbc3
@@ -1077,6 +1167,7 @@ mbc3_rom_switch_in_limit:
 		cnop	0,4
 pc_in_ram_mbc3:	add.l	a2,a0					;old ram address base.
 		rts
+		ENDIF
 
 		cnop	0,4
 mbc3_ram_protection:
@@ -1309,7 +1400,7 @@ READ_RAM_BYTE:	MACRO
 		IFEQ	Z80_MODE
 		cmp.w	#$ff04,\1
 		blo.s	read_ram_raw\@
-		cmp.w	#$ff40,\1
+		cmp.w	#$ff42,\1
 		bhs.s	read_ram_raw\@
 		move.w	\1,d6
 		IFGT	\3
@@ -1341,7 +1432,7 @@ READ_RAM_STACK:	MACRO
 		IFEQ	Z80_MODE
 		cmp.w	#$ff03,d5
 		blo.s	read_stack_raw\@
-		cmp.w	#$ff40,d5
+		cmp.w	#$ff42,d5
 		bhs.s	read_stack_raw\@
 		addq.l	#\2,a5
 		bsr.l	cpu_timed_stack

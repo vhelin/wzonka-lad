@@ -9198,8 +9198,10 @@ vbr_blank:	btst.b	#7,$40(a6)			;lcd operation?
 
 		clr.w	window_y_state
 		bsr.w	lcd_blank_vblank
+		IFNE	Z80_MODE
 		btst.b	#0,$ff(a6)			;vbr irq?
 		beq.s	no_vbr_blank			;no. quit.
+		ENDIF
 
 		bset.b	#1,irq_status_flags
 		bset.b	#0,$0f(a6)			;vbr occurred.

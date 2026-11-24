@@ -50,6 +50,7 @@ v1.12.00 (21-Nov-2026):
   the timer calibration failure in Blargg's instruction timing test.
 * FULL charges five machine cycles for interrupt entry, whether the IRQ
   is accepted inside a CPU slice or by the scanline scheduler.
+* FULL latches VBlank in IF even when masked in IE.
 * DMG startup recreates the boot logo tiles and map, mirrors WRAM into
   Echo RAM, and returns $FF from unused I/O, including $FF50.
   Cold boot now fills WRAM with a varied pattern without overwriting

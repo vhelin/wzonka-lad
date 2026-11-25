@@ -1124,8 +1124,10 @@ read_pixels_a_lot:
 		IFEQ	GFX_COMPARE_READBACK
 		tst.b	window_direct_readback
 		beq.s	read_pixels_os
-		ENDC
+		bra.w	window_try_fused
+		ELSE
 		bra.w	window_read_pixels
+		ENDC
 read_pixels_os:
 		jsr	ReadPixelArray8(a6)
 read_pixels_ready:

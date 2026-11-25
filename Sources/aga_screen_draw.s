@@ -81,6 +81,7 @@ clear_aga_present:
 
 ; Full starts at row 0, not at the x/153 sprite bitmap's 16-row margin.
 clear_aga_scanline_sprites:
+		bsr.w	gfx_cache_invalidate
 		move.l	aga_map_inactive,a0
 		lea	160(a0),a0
 		move.w	#144-1,d0
@@ -175,6 +176,7 @@ screen_aga_bg:	move.l	d7,d0				;d0 = lcd control byte.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 		move.l	aga_map_inactive,a0		;a0 = p0.
+		bsr.w	screen_aga_bg_cache_begin
 		add.l	#40*8*16+64/8-1,a0		;position fix.
 		moveq.l	#(144/8)+1-1,d0			;y.
 		move.l	tile_adder,d2			;d2 = tile adder.
@@ -252,13 +254,22 @@ screen_aga_pack_row: MACRO
 		move.l	d3,\1
 		ENDM
 
+		tst.l	aga_bg_cache_next
+		beq.s	screen_aga_pack_block
+		bsr.w	screen_aga_bg_cache_block
+		beq.w	screen_aga_skip_block
+screen_aga_pack_block:
 		moveq.l	#8/2-1,d6
 screen_aga_out:	screen_aga_pack_row (a0),40(a0)
 		screen_aga_pack_row 320(a0),360(a0)
 		add.l	#2*8*40,a0
 		dbra	d6,screen_aga_out		;next pair of rows.
 
-		sub.l	#8*8*40-4,a0			;next x.
+		sub.l	#8*8*40-4,a0		;next x.
+		bra.s	screen_aga_next_block
+screen_aga_skip_block:
+		addq.l	#4,a0				;next x.
+screen_aga_next_block:
 		dbra	d1,screen_aga_rows		;next four blocks.
 
 		movem.l	(SP)+,d6/d7/a0
@@ -275,11 +286,115 @@ screen_aga_tup:	sub.l	#32*31,a1			;back to the beginning.
 		dbra	d0,screen_aga_colu		;next 168x8 line.
 		rts
 
+screen_aga_bg_cache_begin:
+		move.l	aga_bg_cache,d0
+		move.l	d0,aga_bg_cache_next
+		beq.s	screen_aga_bg_cache_ready
+		move.l	d0,a3
+		move.l	a0,d0
+		lea	aga_bg_motion,a4
+		cmp.l	aga_map_I,d0
+		beq.s	screen_aga_bg_cache_first
+		addq.l	#4,a4
+		addq.l	#1,a3
+screen_aga_bg_cache_first:
+		move.l	a4,aga_bg_motion_slot
+		move.w	d6,d3
+		lsl.w	#8,d3
+		move.b	d7,d3
+		cmp.w	(a4),d3
+		beq.s	screen_aga_bg_cache_stationary
+		move.w	d3,(a4)
+		cmp.b	#2,2(a4)
+		bhs.s	screen_aga_bg_cache_bypass
+		cmp.b	#80,3(a4)
+		blo.s	screen_aga_bg_cache_stationary
+		addq.b	#1,2(a4)
+		cmp.b	#2,2(a4)
+		bhs.s	screen_aga_bg_cache_bypass
+		bra.s	screen_aga_bg_cache_enable
+screen_aga_bg_cache_stationary:
+		clr.b	2(a4)
+screen_aga_bg_cache_enable:
+		clr.b	3(a4)
+		move.b	(a3),aga_bg_cache_cold
+		st	(a3)
+		not.b	aga_bg_cache_cold
+		move.l	aga_bg_cache,a3
+		cmp.l	aga_map_I,d0
+		beq.s	screen_aga_bg_cache_ptr
+		lea	aga_bg_cache_buffer(a3),a3
+screen_aga_bg_cache_ptr:
+		lea	4(a3),a3
+		move.l	a3,aga_bg_cache_next
+screen_aga_bg_cache_ready:
+		rts
+screen_aga_bg_cache_bypass:
+		clr.b	(a3)				;the uncached draw overwrites this buffer.
+		clr.l	aga_bg_cache_next
+		rts
+
+aga_bg_compare_tile: MACRO
+		move.l	(\1),d3
+		cmp.l	\2(a0),d3
+		bne.w	screen_aga_bg_cache_miss
+		move.l	4(\1),d3
+		cmp.l	\2+4(a0),d3
+		bne.w	screen_aga_bg_cache_miss
+		move.l	8(\1),d3
+		cmp.l	\2+8(a0),d3
+		bne.w	screen_aga_bg_cache_miss
+		move.l	12(\1),d3
+		cmp.l	\2+12(a0),d3
+		bne.w	screen_aga_bg_cache_miss
+		ENDM
+
+aga_bg_save_tile: MACRO
+		movem.l	(\1),d3-d6
+		movem.l	d3-d6,\2(a0)
+		ENDM
+
+; Compare actual pattern bytes, not IDs, so VRAM edits need no write hook.
+; a3-a6 point to four raw tiles; the buffer-specific snapshot is in Fast RAM.
+screen_aga_bg_cache_block:
+		move.l	a0,-(sp)
+		move.l	aga_bg_cache_next,a0
+		add.l	#64,aga_bg_cache_next
+		tst.b	aga_bg_cache_cold
+		bne.w	screen_aga_bg_cache_save
+		aga_bg_compare_tile a3,0
+		aga_bg_compare_tile a4,16
+		aga_bg_compare_tile a5,32
+		aga_bg_compare_tile a6,48
+		move.l	(sp)+,a0
+		moveq.l	#0,d3
+		rts
+screen_aga_bg_cache_miss:
+		move.l	a1,-(sp)
+		move.l	aga_bg_motion_slot,a1
+		addq.b	#1,3(a1)
+		move.l	(sp)+,a1
+screen_aga_bg_cache_save:
+		aga_bg_save_tile a3,0
+		aga_bg_save_tile a4,16
+		aga_bg_save_tile a5,32
+		aga_bg_save_tile a6,48
+		move.l	(sp)+,a0
+		moveq.l	#1,d3
+		rts
+
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		clear the background
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 screen_aga_clear_the_background:
+		move.l	aga_bg_cache,d0
+		beq.s	screen_aga_clear_background_start
+		move.l	d0,a0
+		clr.l	(a0)
+		clr.l	aga_bg_motion
+		clr.l	aga_bg_motion+4
+screen_aga_clear_background_start:
 		move.l	aga_map_inactive,a0
 		moveq.l	#256/2-1,d0			;two rows per iteration.
 		moveq.l	#0,d1
@@ -334,7 +449,13 @@ aga_clear_sprite_next:
 		rts
 
 		cnop	0,4
-screen_aga_sprs:gfx_aga_part_start
+screen_aga_sprs:
+		tst.l	aga_layer_cache
+		beq.s	screen_aga_sprs_draw
+		bsr.w	aga_layer_check
+		beq.w	aga_spr_exit
+screen_aga_sprs_draw:
+		gfx_aga_part_start
 ; Six zero longwords cover the existing 24-byte span in each plane.
 		moveq.l	#0,d1
 		moveq.l	#0,d3

@@ -22,8 +22,24 @@ I take no responsibility for anything.
 
 2. CHANGELOG (RECENT)
 
-v1.12.00 (21-Nov-2026):
+v1.12.00 (25-Nov-2026):
 
+* Scalable Window uses the actual window borders for drag and hotkey
+  resizing, removing the unused strip beside the game image.
+* Cache graphics bypasses the AGA x/153 background cache during repeated
+  whole-tile scrolling misses, and reuses an unchanged sprite layer per
+  buffer. AGA Full GFX can skip identical sprite-block writes to Chip RAM.
+* With Cache graphics and Direct Window readback on, Scalable Window at
+  160x144 converts straight from bitplanes to final pens. Every Window
+  draw writes all scanlines instead of reusing rows from a previous frame.
+* Misc settings now has an opt-in Cache graphics checkbox (saved by Save
+  default; takes effect when play resumes). It reduces AGA Full GFX sprite
+  traffic using a Fast RAM scratch row, and skips unchanged AGA x/153
+  background blocks per display buffer. If Fast RAM is unavailable, AGA
+  uses the original renderer and reports it when you pause.
+* With Cache graphics and Direct Window readback enabled, Scalable Window
+  at 320x144 and 320x288 converts directly from bitplanes to scaled pens,
+  without storing the intermediate 160x144 image.
 * Joypad interrupts follow falling edges on the selected Game Boy input
   lines, avoiding a spurious request in Blargg's halt bug test
 * FULL checks for pending interrupts after a write to IF or IE, before

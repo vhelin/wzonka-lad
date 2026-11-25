@@ -110,7 +110,7 @@ gb_screen_x		=192
 gb_screen_y		=176
 register_x		=320
 register_y		=160
-window_right_bar_x	=14
+window_size_border_guess	=14
 window_max_game_x	=160*9
 window_max_game_y	=144*9
 window_resize_idcmp	=IDCMP_NEWSIZE!IDCMP_CHANGEWINDOW!IDCMP_RAWKEY
@@ -316,26 +316,16 @@ gb_emu:		movem.l	d2-d7/a2-a6,-(SP)
 ;		obtain crucial window dimensions
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		lea	wzonka_window,a1
-
 		move.l	screen_font_y,d1
 		addq.l	#3+2,d1
 		move.l	d1,window_bars_height
-		move.w	d1,d2
-		add.w	#window_max_game_y,d2
-		move.w	d2,nw_MaxHeight(a1)
 		add.l	#144,d1
-		move.w	d1,nw_MinHeight(a1)
 		move.w	d1,wzonka_window_y
 
 		moveq.l	#8,d1
 		move.l	d1,window_bars_width
-		move.w	d1,d2
-		add.w	#window_max_game_x+window_right_bar_x,d2
-		move.w	d2,nw_MaxWidth(a1)
-		add.l	#160+window_right_bar_x,d1
+		add.l	#160+window_size_border_guess,d1
 		move.w	d1,wzonka_window_x
-		move.w	d1,nw_MinWidth(a1)
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		create message port
@@ -1447,16 +1437,16 @@ wzonka_resize_key:
 		move.w	window_requested_width,d4
 		move.w	window_requested_height,d5
 wzonka_resize_axis:
+		bsr.w	wzonka_border_extents
 		and.w	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d3
 		bne.s	wzonka_resize_key_height
 		mulu.w	#160,d2
-		add.w	window_bars_width+2,d2
-		add.w	#window_right_bar_x,d2
+		add.w	d0,d2
 		move.w	d2,d4
 		bra.s	wzonka_resize_key_check
 wzonka_resize_key_height:
 		mulu.w	#144,d2
-		add.w	window_bars_height+2,d2
+		add.w	d1,d2
 		move.w	d2,d5
 wzonka_resize_key_check:
 		tst.w	window_requested_width
@@ -2744,7 +2734,8 @@ vbr_obtained:	move.l	vbr_pointer,a0			;from memory with love.
 ;		normal procedures before starting the game
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-no_aga_init:	move.l	aga_sprs_cxII,aga_sprs_inactive_x
+no_aga_init:	bsr.w	gfx_cache_open
+		move.l	aga_sprs_cxII,aga_sprs_inactive_x
 		move.l	aga_sprs_cII,aga_sprs_inactive	;this one is universally
 							;used.
 		clr.b	lcd_blank_presented
@@ -2770,8 +2761,13 @@ back_to_menu:	bsr.w	turn_ahi_off			;turn off the sounds.
 		IFNE	GFX_PROFILE
 		bsr.w	gfx_profile_report
 		ENDC
+		bsr.w	gfx_cache_close
 
 		lea	status_paused_txt,a5
+		tst.b	aga_cache_unavailable
+		beq.s	paused_status_ready
+		lea	status_aga_cache_unavailable,a5
+paused_status_ready:
 		bsr.w	print_status_middle
 
 		lea	menu_ptr,a0
@@ -3732,6 +3728,7 @@ pc_accuired:	moveq.l	#0,d1
 		move.w	#($10000-$8000)/4-1,d0
 mem_rest_I:	move.l	(a0)+,(a1)+
 		dbra	d0,mem_rest_I
+		bsr.w	gfx_cache_invalidate
 		tst.b	$ff40-$10000(a1)
 		spl	lcd_blank_phase		;legacy snapshots do not store LCD warm-up.
 		clr.b	lcd_blank_presented
@@ -4404,6 +4401,7 @@ close_graphics:	bsr.b	close_and_free_aga
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 close_and_free_aga:
+		bsr.w	gfx_cache_close
 		lea	list_aga,a5
 		bsr.w	free_vectors			;free the allocated memory.
 		rts
@@ -4590,11 +4588,12 @@ wzonka_size_commit:
 		move.w	d2,bm_BytesPerRow(a0)
 wzonka_size_title:
 		move.l	wzonka_game_x,d0
-		lea	wzonka_window_title_x,a0
+		lea	wzonka_window_title_dimensions,a0
 		bsr.w	format_wzonka_window_dimension
+		move.b	#"x",(a0)+
 		move.l	wzonka_game_y,d0
-		lea	wzonka_window_title_y,a0
 		bsr.w	format_wzonka_window_dimension
+		clr.b	(a0)
 		move.l	a5,a0
 		lea	wzonka_window_title_txt,a1
 		lea	wzonka_window_screen_txt,a2
@@ -4605,11 +4604,23 @@ wzonka_size_snap:
 		beq.s	wzonka_size_done
 		tst.w	window_requested_width
 		bne.s	wzonka_size_done			;don't override a queued keyboard resize.
-		move.w	wzonka_game_x+2,d4
-		add.w	window_bars_width+2,d4
-		add.w	#window_right_bar_x,d4
+		bsr.s	wzonka_game_outer_size
 		cmp.w	wd_Width(a5),d4
-		beq.s	wzonka_size_done
+		bne.s	wzonka_size_change_box
+		cmp.w	wd_Height(a5),d5
+		bne.s	wzonka_size_change_box
+		; Set limits once the window is within range, including after an opening snap.
+		move.l	d0,d2
+		move.l	d1,d3
+		add.w	#160,d0
+		add.w	#144,d1
+		add.w	#window_max_game_x,d2
+		add.w	#window_max_game_y,d3
+		move.l	a5,a0
+		move.l	intuition_base,a6
+		jsr	_LVOWindowLimits(a6)
+		bra.s	wzonka_size_done
+wzonka_size_change_box:
 		bsr.w	set_wzonka_window_box
 wzonka_size_done:
 		moveq.l	#1,d0
@@ -4619,15 +4630,29 @@ wzonka_size_failed:
 		clr.l	window_requested_width
 		tst.l	wzonka_game_x
 		beq.s	wzonka_size_beep
-		move.w	wzonka_game_x+2,d4
-		add.w	window_bars_width+2,d4
-		add.w	#window_right_bar_x,d4
-		move.w	wzonka_game_y+2,d5
-		add.w	window_bars_height+2,d5
+		bsr.s	wzonka_game_outer_size
 		bsr.w	set_wzonka_window_box		;restore the last drawable size.
 wzonka_size_beep:
 		bsr.w	wzonka_resize_denied
 		moveq.l	#0,d0
+		rts
+
+wzonka_game_outer_size:
+		bsr.s	wzonka_border_extents
+		move.w	wzonka_game_x+2,d4
+		add.w	d0,d4
+		move.w	wzonka_game_y+2,d5
+		add.w	d1,d5
+		rts
+
+; The GIMMEZEROZERO RastPort starts inside the actual system borders.
+wzonka_border_extents:
+		moveq.l	#0,d0
+		moveq.l	#0,d1
+		move.b	wd_BorderLeft(a5),d0
+		add.b	wd_BorderRight(a5),d0
+		move.b	wd_BorderTop(a5),d1
+		add.b	wd_BorderBottom(a5),d1
 		rts
 
 ;		d4/d5 = outer box size; return inner width/height in d2/d3.
@@ -4637,19 +4662,38 @@ reserve_wzonka_window_size:
 		moveq.l	#0,d3
 		move.w	d4,d2
 		move.w	d5,d3
+		tst.b	scaling_status
+		bne.s	wzonka_reserve_scalable
 		sub.l	window_bars_width,d2
 		sub.l	window_bars_height,d3
-		tst.b	scaling_status
-		beq.s	wzonka_size_reserved
-		sub.l	#window_right_bar_x,d2
+		bra.w	wzonka_size_reserved
+wzonka_reserve_scalable:
+		bsr.s	wzonka_border_extents
+		sub.l	d0,d2
+		sub.l	d1,d3
 		and.l	#-16,d2				;WritePixelArray8 rows are 16-pixel aligned.
-		cmp.l	#160,d2
-		blo.s	wzonka_reserve_failed
+		cmp.l	#160,d2				;Saved outer bounds may use different borders.
+		bge.s	wzonka_reserve_max_width
+		move.l	#160,d2
+wzonka_reserve_max_width:
 		cmp.l	#window_max_game_x,d2
-		bhi.s	wzonka_reserve_failed
+		bls.s	wzonka_reserve_min_height
+		move.l	#window_max_game_x,d2
+wzonka_reserve_min_height:
 		cmp.l	#144,d3
-		blo.s	wzonka_reserve_failed
+		bge.s	wzonka_reserve_max_height
+		move.l	#144,d3
+wzonka_reserve_max_height:
 		cmp.l	#window_max_game_y,d3
+		bls.s	wzonka_reserve_screen
+		move.l	#window_max_game_y,d3
+wzonka_reserve_screen:
+		move.l	wd_WScreen(a5),a0
+		add.w	d2,d0
+		add.w	d3,d1
+		cmp.w	sc_Width(a0),d0
+		bhi.s	wzonka_reserve_failed
+		cmp.w	sc_Height(a0),d1
 		bhi.s	wzonka_reserve_failed
 		cmp.w	#160,d2
 		bne.s	wzonka_scale_bytes
@@ -4681,28 +4725,34 @@ wzonka_reserve_failed:
 		rts
 
 format_wzonka_window_dimension:
+		cmp.l	#1000,d0
+		blo.s	wzonka_dimension_under_1000
 		divu.w	#1000,d0
-		move.b	d0,d1
-		beq.s	wzonka_dimension_space
-		add.b	#"0",d1
-		bra.s	wzonka_dimension_thousands
-wzonka_dimension_space:
-		moveq.l	#" ",d1
-wzonka_dimension_thousands:
-		move.b	d1,(a0)+
+		add.b	#"0",d0
+		move.b	d0,(a0)+
 		clr.w	d0
 		swap	d0
+		bra.s	wzonka_dimension_hundreds
+wzonka_dimension_under_1000:
+		cmp.l	#100,d0
+		bhs.s	wzonka_dimension_hundreds
+		cmp.l	#10,d0
+		bhs.s	wzonka_dimension_tens
+		bra.s	wzonka_dimension_ones
+wzonka_dimension_hundreds:
 		divu.w	#100,d0
 		add.b	#"0",d0
 		move.b	d0,(a0)+
 		clr.w	d0
 		swap	d0
+wzonka_dimension_tens:
 		divu.w	#10,d0
 		add.b	#"0",d0
 		move.b	d0,(a0)+
 		swap	d0
+wzonka_dimension_ones:
 		add.b	#"0",d0
-		move.b	d0,(a0)
+		move.b	d0,(a0)+
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -4859,6 +4909,7 @@ misc_jmp_table:	dc.l	misc_forbid_permit
 		dc.l	misc_fast_ram_bitmaps
 		dc.l	misc_get_gg
 		dc.l	misc_window_readback
+		dc.l	misc_cache_graphics
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		get a new patch code
@@ -5051,6 +5102,12 @@ misc_window_readback:
 		move.l	misc_b_readback,a0
 		bsr.w	get_checkbox
 		move.b	d0,window_direct_readback
+		bra.w	get_message
+
+misc_cache_graphics:
+		move.l	misc_b_cache,a0
+		bsr.w	get_checkbox
+		move.b	d0,cache_graphics
 		bra.w	get_message
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -5860,15 +5917,24 @@ prefs_load_error:
 save_window_readback_pref:
 		move.l	#$57445242,(a5)+		;"WDRB"
 		move.b	window_direct_readback,(a5)+
+		move.l	#$47465843,(a5)+		;"GFXC"
+		move.b	cache_graphics,(a5)+
 		rts
 
 load_window_readback_pref:
+		clr.b	cache_graphics
 		clr.b	window_direct_readback
 		cmp.l	#$57445242,(a2)+
 		bne.s	window_readback_pref_done
+		cmp.b	#1,(a2)+
+		bne.s	load_cache_graphics_pref
+		move.b	#1,window_direct_readback
+load_cache_graphics_pref:
+		cmp.l	#$47465843,(a2)+
+		bne.s	window_readback_pref_done
 		cmp.b	#1,(a2)
 		bne.s	window_readback_pref_done
-		move.b	#1,window_direct_readback
+		move.b	#1,cache_graphics
 window_readback_pref_done:
 		rts
 
@@ -12533,6 +12599,7 @@ pull_z80:	lea	z80_registers,a6
 		include	"rle_unpacker.s"
 		include	"screen_draw_new_II.s"
 		include	"window_readback.s"
+		include	"gfx_cache.s"
 		include	"aga_screen_draw.s"
 		include	"scanline_draw_II.s"
 		include	"scanline_aga_I.s"
@@ -13087,6 +13154,13 @@ aga_hw_spr_cI:	dc.l	0
 
 aga_map_I:	dc.l	0
 aga_map_II:	dc.l	0
+aga_sprite_cache:dc.l	0
+aga_bg_cache:	dc.l	0
+aga_bg_cache_next:dc.l	0
+aga_sprite_shadow:dc.l	0
+aga_layer_cache:dc.l	0
+aga_bg_motion:	ds.l	2
+aga_bg_motion_slot:dc.l	0
 aga_map_inactive:
 		dc.l	0
 
@@ -13432,6 +13506,7 @@ misc_b_2:	dc.l	0
 misc_b_3:	dc.l	0
 misc_b_6:	dc.l	0
 misc_b_readback:dc.l	0
+misc_b_cache:	dc.l	0
 misc_b_str_1:	dc.l	0
 misc_b_str_2:	dc.l	0
 misc_b_str_3:	dc.l	0
@@ -13442,8 +13517,8 @@ misc_str_1:	dc.l	0
 misc_str_2:	dc.l	0
 misc_str_3:	dc.l	0
 
-misc_g_y	=36
-misc_patch_y	=misc_g_y+13
+misc_g_y	=20
+misc_patch_y	=misc_g_y+29
 
 misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	PLACETEXT_RIGHT
@@ -13480,6 +13555,15 @@ misc_gadgets:	dc.w	100,misc_g_y
 		dc.l	alter_tags_checkbox
 		dc.l	window_direct_readback
 		dc.l	misc_b_readback
+
+		dc.w	100,misc_g_y+13*4
+		dc.l	PLACETEXT_RIGHT
+		dc.l	misc_b_cache_txt
+		dc.w	9
+		dc.w	5				;checkbox_kind!
+		dc.l	alter_tags_checkbox
+		dc.l	cache_graphics
+		dc.l	misc_b_cache
 
 		dc.w	260,58+misc_patch_y
 		dc.l	PLACETEXT_IN
@@ -13558,6 +13642,8 @@ misc_b_3_txt:	dc.b	"Patch",0
 misc_b_6_txt:	dc.b	"Bitmaps in FAST RAM",0
 		even
 misc_b_readback_txt:dc.b	"Direct Window readback",0
+		even
+misc_b_cache_txt:dc.b	"Cache graphics",0
 		even
 
 misc_b_str_1_txt:
@@ -15036,7 +15122,7 @@ gfx_bevel_list:	dc.w	20,10,334,65
 		dc.w	20,114,334,69
 		dc.w	0
 
-misc_bevel_list:dc.w	75,misc_g_y-6,255,49+13
+misc_bevel_list:dc.w	75,misc_g_y-6,255,72
 		dc.w	35,misc_patch_y+53,305,78
 		dc.w	0
 
@@ -15866,8 +15952,7 @@ wzonka_window:	dc.w	0
 		dc.l	0
 		dc.w	160
 		dc.w	144
-		dc.w	window_max_game_x+8+window_right_bar_x
-		dc.w	window_max_game_y+24
+		dc.w	-1,-1				;use screen bounds until borders are known.
 		dc.w	WBENCHSCREEN
 
 wzonka_title:	dc.b	" ",0
@@ -15875,11 +15960,8 @@ wzonka_title:	dc.b	" ",0
 
 wzonka_window_title_txt:
 		dc.b	"Gameboy "
-wzonka_window_title_x:
-		dc.b	"    "
-		dc.b	"x"
-wzonka_window_title_y:
-		dc.b	"    ",0
+wzonka_window_title_dimensions:
+		dc.b	"160x144",0,0,0
 		even
 
 wzonka_window_screen_txt:
@@ -16807,6 +16889,9 @@ status_running_txt:
 status_paused_txt:
 		dc.b	"> Emulation paused <",0
 		even
+status_aga_cache_unavailable:
+		dc.b	"> Graphics cache limited: not enough Fast RAM <",0
+		even
 status_file_not_found_txt:
 		dc.b	"> File not found <",0
 		even
@@ -16966,6 +17051,10 @@ fast_ram_bitmaps:
 		dc.b	0
 window_direct_readback:
 		dc.b	0
+cache_graphics:	dc.b	0
+aga_sprite_cache_touched:dc.b	0
+aga_bg_cache_cold:dc.b	0
+aga_cache_unavailable:dc.b	0
 
 obtain_status_counter:
 		dc.b	4

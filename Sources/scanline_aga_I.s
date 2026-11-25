@@ -395,6 +395,11 @@ scan_aga_wxt:	rts
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 scan_aga_sprs:	gfx_aga_part_start
+		tst.l	aga_sprite_cache
+		beq.s	scan_aga_sprs_clear
+		clr.b	aga_sprite_cache_touched
+		bra.s	empty_spr_done
+scan_aga_sprs_clear:
 		move.l	aga_sprs_inactive,a0
 		move.l	gb_scanlines,d7
 		add.l	d7,a0
@@ -478,6 +483,21 @@ sspr_aga_picked:
 		add.w	#64/8-1,d6			;aga h/w position fix.
 		move.l	aga_map_inactive,a2
 		add.l	d6,a2
+		move.l	aga_sprite_cache,d3
+		move.l	#0,a6
+		tst.l	d3
+		beq.s	sspr_aga_target_ready
+		cmp.b	#1,d2
+		bne.s	sspr_aga_target_cached
+		move.l	aga_sprs_inactive,a4
+		move.l	gb_scanlines,d7
+		tst.b	(a4,d7.w)
+		beq.s	sspr_aga_target_ready		;one pick on a clean row: write directly.
+sspr_aga_target_cached:
+		move.l	d3,a2
+		lea	7-160(a2),a2			;use the same plane offsets in Fast RAM.
+		lea	aga_sprite_cache_blocks(pc),a6
+sspr_aga_target_ready:
 		move.l	x_flip_table,a3
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -529,6 +549,15 @@ no_aga_spr_yf:	lsl.b	#1,d6				;y = y * 2 (for data).
 
 no_aga_spr_xf:	move.l	d2,d3
 		lsr.b	#3,d3				;d3 = x.B / 8.
+		tst.l	a6
+		beq.s	aga_spr_locate
+		cmp.b	#20,d3
+		bne.s	aga_spr_mark_blocks
+		bsr.w	aga_sprite_cache_margin
+aga_spr_mark_blocks:
+		move.b	(a6,d3.w),d6
+		or.b	d6,aga_sprite_cache_touched
+aga_spr_locate:
 		lea	(a2,d3.l),a4			;sprite output at x.
 
 		btst	#4,d1				;which palette?
@@ -568,4 +597,133 @@ aga_spr_out:	moveq.l	#0,d3
 aga_next_spr:	dbra	d0,sspr_aga_c8xq		;next sprite.
 		swap	d0
 		move.b	d0,aga_spr_amount
-aga_spr_exit:	rts
+aga_spr_exit:	tst.l	aga_sprite_cache
+		bne.w	aga_sprite_cache_flush
+		rts
+
+; A sprite word can touch two longwords. Byte 28 is outside the normal
+; clear area, so seed it from CHIP only if a sprite word can reach it.
+aga_sprite_cache_blocks:
+		dc.b	$06,$04,$04,$04,$0c,$08,$08,$08
+		dc.b	$18,$10,$10,$10,$30,$20,$20,$20
+		dc.b	$60,$40,$40,$40,$c0,0
+
+aga_sprite_cache_margin:
+		btst	#7,aga_sprite_cache_touched
+		bne.s	aga_sprite_cache_margin_done
+		move.l	gb_scanlines,d6
+		mulu.w	#320,d6
+		move.l	aga_map_inactive,a4
+		lea	188(a4,d6.l),a4
+		move.b	(a4),181(a2)
+		move.b	40(a4),221(a2)
+		move.b	80(a4),261(a2)
+		move.b	120(a4),301(a2)
+aga_sprite_cache_margin_done:
+		rts
+
+aga_sprite_cache_flush:
+		move.l	gb_scanlines,d0
+		move.l	aga_sprs_inactive,a3
+		add.l	d0,a3
+		moveq.l	#0,d1
+		move.b	aga_sprite_cache_touched,d1
+		bne.s	aga_sprite_cache_flush_work
+		tst.b	(a3)
+		beq.w	aga_sprite_cache_flush_done
+aga_sprite_cache_flush_work:
+		move.l	aga_sprite_cache,a0
+		lea	160(a0),a1
+		move.l	aga_map_inactive,d2
+		move.l	d2,a2
+		cmp.l	aga_map_I,d2
+		beq.s	aga_sprite_cache_buffer_ready
+		lea	144(a1),a1
+aga_sprite_cache_buffer_ready:
+		add.l	d0,a1
+		moveq.l	#0,d2
+		move.b	(a1),d2
+		move.l	d2,d4				;blocks with a known shadow.
+		move.b	d1,(a1)
+		and.b	#$7f,(a1)			;do not clear the margin on reuse.
+		tst.b	(a3)
+		beq.s	aga_sprite_cache_flush_union
+		clr.b	(a3)
+		tst.b	d2
+		bne.s	aga_sprite_cache_flush_union
+		moveq.l	#$7f,d2			;row was drawn by the uncached path.
+aga_sprite_cache_flush_union:
+		or.b	d1,d2
+		beq.w	aga_sprite_cache_flush_done
+		move.l	aga_sprite_shadow,d1
+		move.l	d1,a4
+		beq.s	aga_sprite_cache_place
+		move.l	d0,d3
+		move.l	a2,d5
+		cmp.l	aga_map_I,d5
+		beq.s	aga_sprite_shadow_row
+		add.w	#144,d3
+aga_sprite_shadow_row:
+		mulu.w	#112,d3
+		add.l	d3,a4
+aga_sprite_cache_place:
+		mulu.w	#320,d0
+		lea	160(a2,d0.l),a2
+		moveq.l	#0,d3
+		moveq.l	#6,d0
+aga_sprite_cache_flush_group:
+		lsr.b	#1,d2
+		bcc.s	aga_sprite_cache_flush_next
+		tst.l	a4
+		beq.s	aga_sprite_cache_write
+		move.l	(a0),d5
+		move.l	40(a0),d6
+		move.l	80(a0),d7
+		move.l	120(a0),d1
+		btst	#0,d4
+		beq.s	aga_sprite_shadow_save
+		cmp.l	(a4),d5
+		bne.s	aga_sprite_shadow_save
+		cmp.l	4(a4),d6
+		bne.s	aga_sprite_shadow_save
+		cmp.l	8(a4),d7
+		bne.s	aga_sprite_shadow_save
+		cmp.l	12(a4),d1
+		beq.s	aga_sprite_cache_zero
+aga_sprite_shadow_save:
+		move.l	d5,(a4)
+		move.l	d6,4(a4)
+		move.l	d7,8(a4)
+		move.l	d1,12(a4)
+		move.l	d5,(a2)
+		move.l	d6,40(a2)
+		move.l	d7,80(a2)
+		move.l	d1,120(a2)
+		bra.s	aga_sprite_cache_zero
+aga_sprite_cache_write:
+		move.l	(a0),(a2)
+		move.l	40(a0),40(a2)
+		move.l	80(a0),80(a2)
+		move.l	120(a0),120(a2)
+aga_sprite_cache_zero:
+		move.l	d3,(a0)
+		move.l	d3,40(a0)
+		move.l	d3,80(a0)
+		move.l	d3,120(a0)
+aga_sprite_cache_flush_next:
+		lsr.b	#1,d4
+		tst.l	a4
+		beq.s	aga_sprite_shadow_next
+		lea	16(a4),a4
+aga_sprite_shadow_next:
+		addq.l	#4,a2
+		addq.l	#4,a0
+		dbra	d0,aga_sprite_cache_flush_group
+		tst.b	d2				;original bit 7: preserve margin bytes 29..39.
+		beq.s	aga_sprite_cache_flush_done
+		move.b	(a0),(a2)
+		move.b	40(a0),40(a2)
+		move.b	80(a0),80(a2)
+		move.b	120(a0),120(a2)
+aga_sprite_cache_flush_done:
+		rts

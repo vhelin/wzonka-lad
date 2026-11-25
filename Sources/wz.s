@@ -13412,7 +13412,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad 1.12.00"
+menu_title:	dc.b	"Wzonka-Lad 1.13.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -13685,7 +13685,7 @@ misc_txt_2:	dc.b	"GameGenie patch code",0
 ;		menu gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_scr_txt:	dc.b	"Wzonka-Lad 1.12.00"
+menu_scr_txt:	dc.b	"Wzonka-Lad 1.13.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
@@ -14633,7 +14633,7 @@ about_text_2:	dc.b	1
 		dc.l	about_txt_2
 		dc.l	0
 
-about_txt_1:	dc.b	"WZONKA-LAD 1.12.00"
+about_txt_1:	dc.b	"WZONKA-LAD 1.13.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"R"
 		ELSE
@@ -15074,13 +15074,13 @@ misc_win_txt:	dc.b	"Misc settings",0
 ;		the version string
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-version_data:	dc.b	"$VER: Wzonka-Lad 1.12.00"
+version_data:	dc.b	"$VER: Wzonka-Lad 1.13.00"
 		IFEQ	GAMEBOY_USERS
 		dc.b	"r"
 		ELSE
 		dc.b	"e"
 		ENDIF
-		dc.b	" (16.11.2026)",0
+		dc.b	" (25.11.2026)",0
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»

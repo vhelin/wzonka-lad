@@ -7,20 +7,18 @@ PhxAss M=2 wz.s
 c:copy wz "dh0:Wzonka-Lad/Release/binaries/Wzonka-Lad FAST"
 
 echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
-echo "Generating FULL..."
-echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
-c:copy z80_mode_full.i z80_mode.i
-PhxAss M=2 wz.s
-c:copy wz "dh0:Wzonka-Lad/Release/binaries/Wzonka-Lad FULL"
-
-echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
 echo "Generating WARP..."
 echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
 c:copy z80_mode_warp.i z80_mode.i
 PhxAss M=2 wz.s
 c:copy wz "dh0:Wzonka-Lad/Release/binaries/Wzonka-Lad WARP"
 
+echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
+echo "Generating FULL..."
+echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
 c:copy z80_mode_full.i z80_mode.i
+PhxAss M=2 wz.s
+c:copy wz "dh0:Wzonka-Lad/Release/binaries/Wzonka-Lad FULL"
 
 echo "лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл"
 echo "Generating Palette Editor..."

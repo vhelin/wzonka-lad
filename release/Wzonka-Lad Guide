@@ -1,15 +1,15 @@
 @database "Wzonka-Lad Guide"
 @master "Wzonka-Lad Guide"
-@$VER: Wzonka-Lad Guide 1.12.00 (25.11.2026)
+@$VER: Wzonka-Lad Guide 1.13.00 (25.11.2026)
 @author "Ville Helin"
 @(c) "Ville Helin 1996-1999"
 
-@node "main" "Wzonka-Lad v1.12.00 - The Game Boy Fan Software Test Platform"
+@node "main" "Wzonka-Lad v1.13.00 - The Game Boy Fan Software Test Platform"
 @toc "main"
 
           @{b}Before Starting...@{ub}
 
-          @{" ABOUT 1.12.00! READ ME!   " link "aboutw"}
+          @{" ABOUT 1.13.00! READ ME!   " link "aboutw"}
 
           @{" Requirements              " link "req"}  @{" Installing                " link "inst"}
           @{" Debugging                 " link "debug"}
@@ -77,7 +77,7 @@
 
 @endnode
 
-@node "aboutw" "About version 1.12.00"
+@node "aboutw" "About version 1.13.00"
 @toc "main"
 
   Wzonka-Lad emulates Game Boy (DMG), and is meant for the people who wish
@@ -1003,6 +1003,10 @@
 @node "history" "History"
 @toc "main"
 
+  v1.13.00 (25-Nov-2026):
+  
+    * 
+
   v1.12.00 (25-Nov-2026):
 
     * Scalable Window uses the actual window borders for drag and hotkey
@@ -1155,7 +1159,7 @@
     * HALT with interrupts disabled waits. The halt bug runs only when an
       enabled interrupt is already pending. A halted CPU resumes, without
       servicing the interrupt, when one becomes pending while interrupts
-	  stay disabled. STOP is left halted
+      stay disabled. STOP is left halted
     * The crippled core has the same HALT fix. It does not emulate DAA or
       the H flag. Its HALT debug conditional is closed, matching the full core
     * A missing startup library or key file is reported on the console

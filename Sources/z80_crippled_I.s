@@ -729,7 +729,7 @@ z80_optcode_18:	move.b	(a0)+,d7
 		subq.l	#3,a5
 		adda.w	d7,a0
 
-		fetch_next_i
+		jr_finish
 		cnop	0,128
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -977,7 +977,7 @@ z80_optcode_20:	subq.l	#2,a5
 		ext.w	d7					;.B -> .W.
 		adda.w	d7,a0					;pc updated.
 
-		fetch_next_i
+		jr_finish
 		cnop	0,4
 
 z80_optcode_20x:addq.l	#1,a0					;no jump.
@@ -1196,7 +1196,7 @@ z80_optcode_28:	subq.l	#2,a5
 		ext.w	d7					;.B -> .W.
 		adda.w	d7,a0					;pc updated.
 
-		fetch_next_i
+		jr_finish
 		cnop	0,4
 
 z80_optcode_28x:addq.l	#1,a0					;no jump.
@@ -1419,7 +1419,7 @@ z80_optcode_30:	subq.l	#2,a5
 		ext.w	d7					;.B -> .W.
 		adda.w	d7,a0					;pc updated.
 
-		fetch_next_i
+		jr_finish
 		cnop	0,4
 
 z80_optcode_30x:addq.l	#1,a0					;skip jump.
@@ -1628,7 +1628,7 @@ z80_optcode_38:	subq.l	#2,a5
 		ext.w	d7					;.B -> .W.
 		adda.w	d7,a0					;pc updated.
 
-		fetch_next_i
+		jr_finish
 		cnop	0,4
 
 z80_optcode_38x:addq.l	#1,a0					;skip jump.
@@ -3222,6 +3222,11 @@ z80_optcode_76:	subq.l	#1,a5
 		tst.b	i_flag
 		beq.s	z80_optcode_76_halt			;ime on: wait.
 
+		IFLT	Z80_MODE
+		IFEQ	GAMEBOY_USERS
+		bsr.l	sound_div_sync
+		ENDIF
+		ENDIF
 		move.l	a2,a6
 		add.l	#$ff00,a6
 		move.b	$0f(a6),d7				;if.
@@ -3448,7 +3453,7 @@ z80_optcode_7E:	subq.l	#2,a5					;less cycles.
 		fetch_next_i
 
 		cnop	0,4
-read_d2_to_d3a3:move.b	(a2,d2.l),d3				;ram read.
+read_d2_to_d3a3:CLOCK_READ_A d2
 
 		fetch_next_i
 		cnop	0,128
@@ -6363,7 +6368,7 @@ z80_optc_CBEF:	subq.l	#2,a5					;less cycles.
 z80_optcode_F0:	move.w	#$ff00,d7
 		move.b	(a0)+,d7
 		subq.l	#3,a5
-		move.b	(a2,d7.l),d3
+		CLOCK_READ_A d7
 
 		fetch_next_i
 		cnop	0,128
@@ -6414,7 +6419,7 @@ z80_optc_CBF1:	subq.l	#2,a5					;less cycles.
 z80_optcode_F2:	move.w	#$ff00,d7
 		subq.l	#2,a5
 		move.b	d1,d7
-		move.b	(a2,d7.l),d3
+		CLOCK_READ_A d7
 
 		fetch_next_i
 		cnop	0,128
@@ -6598,7 +6603,7 @@ z80_optcode_FA:	move.w	(a0)+,d7
 		fetch_next_i
 		cnop	0,4
 
-read_d7_to_d3a:	move.b	(a2,d7.l),d3				;ram.
+read_d7_to_d3a:	CLOCK_READ_A d7
 
 		fetch_next_i
 		cnop	0,128

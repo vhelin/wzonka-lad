@@ -22,68 +22,39 @@ I take no responsibility for anything.
 
 2. CHANGELOG (RECENT)
 
-v1.12.00 (25-Nov-2026):
+v1.13.00 (27-Nov-2026):
 
-* Scalable Window uses the actual window borders for drag and hotkey
-  resizing, removing the unused strip beside the game image.
-* Cache graphics bypasses the AGA x/153 background cache during repeated
-  whole-tile scrolling misses, and reuses an unchanged sprite layer per
-  buffer. AGA Full GFX can skip identical sprite-block writes to Chip RAM.
-* With Cache graphics and Direct Window readback on, Scalable Window at
-  160x144 converts straight from bitplanes to final pens. Every Window
-  draw writes all scanlines instead of reusing rows from a previous frame.
-* Misc settings now has an opt-in Cache graphics checkbox (saved by Save
-  default; takes effect when play resumes). It reduces AGA Full GFX sprite
-  traffic using a Fast RAM scratch row, and skips unchanged AGA x/153
-  background blocks per display buffer. If Fast RAM is unavailable, AGA
-  uses the original renderer and reports it when you pause.
-* With Cache graphics and Direct Window readback enabled, Scalable Window
-  at 320x144 and 320x288 converts directly from bitplanes to scaled pens,
-  without storing the intermediate 160x144 image.
-* Joypad interrupts follow falling edges on the selected Game Boy input
-  lines, avoiding a spurious request in Blargg's halt bug test
-* FULL checks for pending interrupts after a write to IF or IE, before
-  fetching the next opcode. This addresses Blargg's CPU interrupt case 02
-* The CGB speed-switch register (KEY1) reads as $FF in DMG emulation,
-  preventing Blargg's CPU test 03 from getting stuck in STOP
-* DMG sound length counters now survive NR52 power cycles and accept
-  length-only writes while the APU is off (Blargg sound tests 08 and 11)
-* DMG audio registers now return the hardware read masks (Blargg sound
-  test 01). Write-only values are retained for playback and GBS snapshots
-* DMG audio register writes and length counters keep working when AHI is
-  unavailable, sound is off, or individual playback channels are muted
-* FULL clocks DMG sound lengths from the emulated divider, including
-  DIV resets, and handles the extra length clocks on enable and trigger
-  writes. FAST and WARP retain scanline-based length timing
-* FULL clocks channel 1 frequency sweep from the same divider as length,
-  even with host audio muted. Sweep pace reloads and negate-mode changes
-  now follow DMG hardware (Blargg sound tests 05 and 07)
-* FULL emulates active DMG wave RAM reads, writes and retrigger corruption
-  (Blargg sound tests 09, 10 and 12). Wave timing is calculated on demand;
-  FAST and WARP keep their existing wave RAM behavior
-* FULL advances TIMA from the emulated divider, not from scanline sweeps.
-  Timer reloads and IRQs now occur even when masked in IE. This fixes
-  the timer calibration failure in Blargg's instruction timing test.
-* FULL charges five machine cycles for interrupt entry, whether the IRQ
-  is accepted inside a CPU slice or by the scanline scheduler.
-* FULL latches VBlank in IF even when masked in IE.
-* DMG startup recreates the boot logo tiles and map, mirrors WRAM into
-  Echo RAM, and returns $FF from unused I/O, including $FF50.
-  Cold boot now fills WRAM with a varied pattern without overwriting
-  cartridge save RAM.
-* FULL starts with the DMG divider phase and the end of VBlank. Scanlines
-  budget 114 machine cycles at default speed and carry instruction overrun
-  into the next slice.
-* Keep the display blank while LCDC is off and through the first frame
-  after re-enabling it, without suppressing guest VBlank or CPU timing.
-* Poll host controllers at even intervals across frame boundaries, so
-  joypad interrupts aren't locked to a few scanlines (Telling LYs test).
-* Full GFX latches the Game Boy window when LY equals WY at the start
-  of a scanline and advances its tile row only when visible.
-* FULL restarts LCD timing on line zero after LCDC is re-enabled and
-  samples STAT mode at the CPU's I/O read cycle (STATcount-auto).
-  Mode 3 still uses a fixed baseline duration; sprite, window and
-  scroll stalls are not timed individually. FAST and WARP are unchanged.
-* FULL wraps instruction fetches at the 16-bit PC boundary. BullyGB can
-  display its failure report instead of staying blank on the unsupported
-  DMA bus-conflict test.
+* OAM DMA copies all 160 bytes unchanged, including the low four bits of
+  each sprite attribute byte. $FF46 remembers the last byte written.
+* Pending IRQs raised by guest I/O writes are checked before fetching
+  the next instruction, including HALT.
+* FAST and WARP now use 114 M-cycles per normal scanline, a cycle-based
+  divider, and five M-cycles for interrupt entry. FAST TIMA uses divider
+  edges and preserves writes and post-overflow ticks. WARP still omits
+  periodic TIMA updates.
+* MBC5 RAM header codes $04 and $05 now support all 128 KiB and 64 KiB,
+  respectively, including battery saves and snapshots. Last Crown Warriors
+  uses the 128 KiB layout.
+* VBlank, serial completion, FAST timer overflow, and WARP LYC writes
+  now latch their interrupt requests even if IE masks them. WARP also
+  dispatches pending STAT and timer interrupts to the correct vectors.
+* Joypad register P1 ($FF00) now reads bits 7-6 as ones after writes and
+  snapshot loads.
+* FAST and WARP now wrap taken relative jumps below $0000 into high RAM
+  without adding a check to ordinary opcode fetches. Quartet uses this.
+* FULL and FAST no longer suppress HBlank STAT after the LYC interrupt
+  source is disabled or LY stops matching LYC.
+* FULL and FAST now compare LY with LYC throughout VBlank. This restores
+  the line-150 STAT interrupt used by the Chantey demo.
+* With the LCD off, LY and the STAT mode stay at zero and the inactive
+  modes no longer request STAT interrupts. Turning the LCD back on
+  restarts the scanline counter and checks LYC against line zero without
+  raising a new STAT interrupt if the previous match is still true.
+* Pending VBlank and STAT interrupts are now serviced even after the LCD
+  is turned off, so they no longer block lower-priority interrupts.
+* DMG serial control ($FF02) now reads bits 1-6 as ones, as on hardware.
+  This lets FULL pass Rhythm Land's serial register check.
+* Fixed MBC5 ROM bank layout: games start in bank 1 and can explicitly
+  select bank 0 at $4000. This fixes Rhythm Land's blank screen.
+* Fixed upper ROM bank selection in the $4000-$7FFF window for 1 and 2 MiB
+  MBC1 cartridges, allowing Sam Mallard to boot.

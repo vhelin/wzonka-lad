@@ -242,6 +242,13 @@ fetch_next_i:	MACRO
 f_xit\@:	rts
 		ENDM
 
+; FAST/WARP only: repair a taken JR below $0000 without taxing other opcodes.
+jr_finish:	MACRO
+		cmpa.l	z80_pc_base,a0
+		blo.w	z80_fetch_jr_wrapped
+		fetch_next_i
+		ENDM
+
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		z80 emulator, %1011 = znhc
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -276,9 +283,9 @@ finish_irq_write:
 		clr.b	i_flag
 finish_ei_cancelled:
 		clr.b	z80_ei_return
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bsr.l	sound_div_sync
+		IFLE	Z80_MODE
 		bsr.l	timer_replan
 		ENDIF
 		ENDIF
@@ -308,9 +315,7 @@ z80_start:	move.l	bank_address,a0				;the rom area.
 		move.b	#1,h_the_flag				;h = 1!
 		clr.b	z80_ei_return
 		clr.b	z80_halt_bug
-		IFEQ	Z80_MODE
 		clr.b	z80_irq_cycles
-		ENDIF
 
 		move.b	#%0,mbc1_status
 		move.l	#1,mbc5_rom_bank			;b0, b1.
@@ -332,37 +337,33 @@ z80_cpu_next_sweep:
 		ENDIF
 
 z80_run_slice_first:
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bra.l	sound_cpu_lcd_first
-		ENDIF
-		ENDIF
+		ELSE
 		bra.s	z80_run_slice
+		ENDIF
 
 z80_run_slice_transfer:
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		move.l	z80_cycles,d6
 		subq.l	#1,d6
 		bra.l	sound_cpu_begin_slice
-		ENDIF
-		ENDIF
+		ELSE
 		bra.s	z80_run_slice
+		ENDIF
 
 z80_run_slice_last:
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		move.l	z80_cycles,d6
 		addq.l	#7,d6
 		bra.l	sound_cpu_begin_slice
-		ENDIF
+		ELSE
+		bra.s	z80_run_slice
 		ENDIF
 z80_run_slice:
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bra.l	sound_cpu_slice
-		ENDIF
-		ENDIF
+		ELSE
 		tst.b	z80_halt
 		bne.s	cpu_slice_done
 		bsr.w	z80_cpu_next_sweep
@@ -371,6 +372,24 @@ cpu_slice_ei:	tst.b	z80_ei_return
 		bsr.l	finish_ei
 		bra.s	cpu_slice_ei
 cpu_slice_done:	rts
+		ENDIF
+
+; Keep ordinary FAST/WARP loads direct; synchronize only on clock I/O.
+CLOCK_READ_A:	MACRO
+		IFEQ	GAMEBOY_USERS
+		cmp.w	#$ff04,\1
+		IFLT	Z80_MODE
+		blo.s	clock_read_a_raw\@
+		cmp.w	#$ff0f,\1
+		bhi.s	clock_read_a_raw\@
+		ELSE
+		bne.s	clock_read_a_raw\@
+		ENDIF
+		bsr.l	sound_div_sync
+clock_read_a_raw\@:
+		ENDIF
+		move.b	(a2,\1.l),d3
+		ENDM
 
 z80_fetch_opcode:
 		IFEQ	Z80_MODE
@@ -404,6 +423,7 @@ z80_fetch_linear_raw:
 z80_fetch_wrapped:
 		bsr.s	z80_map_pc
 		bra.s	z80_fetch_linear_raw
+		ENDIF
 
 z80_map_pc:	and.l	#$ffff,d6
 		btst	#15,d6
@@ -415,10 +435,17 @@ z80_map_pc_rom:	move.l	a3,z80_pc_base
 		lea	(a3,d6.l),a0
 		rts
 
+		IFEQ	Z80_MODE
 ; A bank write can occur after reading an operand across $FFFF.
 mbc_map_pc:	move.l	a0,d6
 		sub.l	z80_pc_base,d6
 		bra.s	z80_map_pc
+		ELSE
+z80_fetch_jr_wrapped:
+		move.l	a0,d6
+		sub.l	z80_pc_base,d6
+		bsr.s	z80_map_pc
+		fetch_next_i
 		ENDIF
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -433,9 +460,7 @@ write_d6_stack:	bsr.s	write_d6_stackx
 
 		cnop	0,4
 write_irq_stack:move.b	#1,i_flag				;disable IME before pushing an interrupt's PC.
-		IFEQ	Z80_MODE
 		move.b	#5,z80_irq_cycles			;the scanline dispatcher runs before the slice budget is set.
-		ENDIF
 ; Test the original SP: both bytes must belong to one ordinary RAM range.
 ; SP=$de01 crosses the WRAM echo boundary; $ff81 crosses into I/O.
 write_d6_stackx:cmp.w	#$ff82,d5
@@ -520,22 +545,36 @@ lcd_mode_write:	lea	$ff40(a2),a6
 		btst.b	#7,(a6)
 		bne.s	lcd_mode_write_done
 		move.b	#1,lcd_blank_phase
-		IFEQ	Z80_MODE
+		st	lcd_start_line
+		clr.b	irq_status_flags
+; The first line starts in mode 0, but only the LY comparator is active.
+		clr.b	4(a6)
+		and.b	#$fc,1(a6)
+		tst.b	5(a6)
+		beq.s	lcd_mode_matching
+		bclr.b	#2,1(a6)
+		bra.s	lcd_mode_started
+lcd_mode_matching:
+		bset.b	#2,1(a6)
+		IFLE	Z80_MODE
+		bne.s	lcd_mode_started		;the retained match was already set.
+		btst.b	#6,1(a6)
+		beq.s	lcd_mode_started
+		bset.b	#1,$ff0f(a2)
+		bset.b	#2,irq_status_flags
+		ENDIF
+lcd_mode_started:
 		IFEQ	GAMEBOY_USERS
 		move.b	d6,(a6)
 		bra.l	lcd_start_request
-		ENDIF
-		ENDIF
+		ELSE
 		bra.s	lcd_mode_write_done
+		ENDIF
 lcd_mode_off:	st	lcd_blank_phase
 		clr.w	window_y_state
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		clr.b	lcd_start_line
 		clr.b	4(a6)
-		and.b	#$f8,1(a6)
-		ENDIF
-		ENDIF
+		and.b	#$fc,1(a6)			;coincidence is retained while off.
 lcd_mode_write_done:
 		move.b	d6,(a6)
 		rts
@@ -546,12 +585,8 @@ lcd_protect:	lea	(a2,d7.l),a6
 		and.b	#%10000111,(a6)
 		or.b	d6,(a6)
 
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		btst.b	#7,$ff40(a2)
 		beq.s	lcd_write_no_irq
-		ENDIF
-		ENDIF
 		move.b	(a6),d6
 		and.b	#%11,d6
 		beq.s	lcd_write_irq
@@ -561,6 +596,7 @@ lcd_protect:	lea	(a2,d7.l),a6
 lcd_write_irq:	move.l	a2,a6			;bug in hardware.
 		add.l	#$ff0f,a6
 		bset.b	#1,(a6)			;lcd irq is about to happen.
+		bra.s	irq_check_after_write
 
 lcd_write_no_irq:
 		rts
@@ -568,15 +604,19 @@ lcd_write_no_irq:
 		cnop	0,4
 irq_protect_0f:
 irq_protect_ff:
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bsr.l	sound_div_sync
 		ENDIF
-		ENDIF
 		or.b	#%11100000,d6
 		move.b	d6,(a2,d7.l)
+		IFEQ	GAMEBOY_USERS
+		IFLE	Z80_MODE
+		bsr.s	irq_check_after_write
+		bra.l	timer_replan
+		ENDIF
+		ENDIF
 
-		IFEQ	Z80_MODE
+irq_check_after_write:
 		tst.b	i_flag
 		bne.s	irq_write_done
 		tst.b	z80_ei_return			;a deferred check is already armed.
@@ -590,15 +630,11 @@ irq_protect_ff:
 		sub.l	a5,a5
 		move.b	#3,z80_ei_return
 irq_write_done:
-		IFEQ	GAMEBOY_USERS
-		bra.l	timer_replan
-		ENDIF
-		ENDIF
 		rts
 
 		cnop	0,4
 timc_protect:
-		IFEQ	Z80_MODE
+		IFLE	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bsr.l	sound_div_sync
 		move.w	timer_bit,-(SP)
@@ -620,7 +656,7 @@ timer_control_done:
 		move.b	d6,(a2,d7.l)
 		rts
 
-		IFEQ	Z80_MODE
+		IFLE	Z80_MODE
 timer_write_count:
 		IFEQ	GAMEBOY_USERS
 		bsr.l	sound_div_sync
@@ -651,10 +687,10 @@ timer_modulo_done:
 
 		cnop	0,4
 clear_divider:
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bsr.l	sound_div_reset
 		move.b	#0,(a2,d7.l)
+		IFLE	Z80_MODE
 		bra.l	timer_replan
 		ENDIF
 		ENDIF
@@ -666,7 +702,8 @@ sio_register:	move.b	d6,(a2,d7.l)
 		rts
 
 		cnop	0,4
-sio_control:	move.b	d6,(a2,d7.l)
+sio_control:	or.b	#$7e,d6				;DMG SC bits 1-6 always read high.
+		move.b	d6,(a2,d7.l)
 		btst	#7,d6
 		bne.s	sio_control_start
 		rts
@@ -697,6 +734,7 @@ rom_write:	rts					;exit the rom write.
 
 		cnop	0,4
 dma_execute:	move.l	a5,-(SP)
+		move.b	d6,$ff46(a2)
 		and.l	#$ff,d6				;d6 = the address (.B).
 		cmp.w	#$f1,d6
 		ble.s	dma_start_ok
@@ -716,11 +754,8 @@ dma_move:	lsl.l	#8,d6				;input fixed.
 		move.l	a2,a6				;output is in ram.
 		add.l	#$fe00,a6			;a6 = output (oam).
 		moveq.l	#40-1,d7
-dma_execute_mv:	move.l	(a5)+,d6
-		and.l	#$fffffff0,d6
-		and.l	#$0000000f,(a6)
-		or.l	d6,(a6)
-		addq.l	#4,a6
+; DMG drawing ignores the low attribute bits, but OAM stores them.
+dma_execute_mv:	move.l	(a5)+,(a6)+
 		dbra	d7,dma_execute_mv		;execute dma move.
 		move.l	(SP)+,a5
 		rts
@@ -737,7 +772,7 @@ do_joystick:
 		beq.s	do_joystick_type_request
 		bsr.s	joypad_update
 		move.l	(SP)+,a6
-		rts
+		bra.w	irq_check_after_write
 
 do_joystick_type_request:
 		move.l	d7,-(SP)
@@ -767,7 +802,7 @@ joypad_update:	move.l	d7,-(SP)
 joypad_update_done:
 		rts
 
-joypad_lines:	or.b	#$0f,d6
+joypad_lines:	or.b	#$cf,d6			;P1 bits 7-6 read high; rebuild bits 3-0 below.
 		btst	#5,d6
 		bne.s	joypad_directions
 		move.b	buttons_byte,d7
@@ -793,38 +828,38 @@ lyc_write:	move.b	d6,(a2,d7.l)
 		add.l	#$ff00,a6
 
 		btst.b	#7,$40(a6)			;lcd enabled?
-		beq.s	kcmp_up				;no.
+		beq.s	lcd_lyc_done
+		bsr.s	lcd_lyc_compare
+		bra.w	irq_check_after_write
 
-		btst.b	#1,irq_status_flags		;vbr effect?
-		beq.s	kcmp_blank_no_filtering
-		move.l	gb_scanlines,d7
-;		beq.s	kcmp_up				;$00 is off limits.
-		cmp.l	#$91,d7
-		bge.s	kcmp_up				;$91-$99 are off limits, too.
-
-kcmp_blank_no_filtering:
+lcd_lyc_compare:
 		move.b	$45(a6),d7			;d7 = ly compare / lyc.
 		cmp.b	$44(a6),d7
-		bne.s	klyc_clear			;not the same.
+		bne.s	lcd_lyc_clear
 		bset.b	#2,$41(a6)			;coincidence occurred.
+		bne.s	lcd_lyc_done			;no new edge (e.g. LY stays 0 into line 0).
 
 		btst.b	#6,$41(a6)			;interrupt?
-		beq.s	kcmp_up				;nope. disabled.
+		beq.s	lcd_lyc_done
 
-		btst.b	#1,$ff(a6)			;lcd controller irq enabled?
-		beq.s	kcmp_up				;no.
+		IFLE	Z80_MODE
+		btst.b	#4,$41(a6)
+		beq.s	lcd_lyc_request
+		cmp.l	#145,gb_scanlines
+		bhs.s	lcd_lyc_done			;enabled mode 1 already holds STAT high.
+		ENDIF
 
-kcmp_starts:
+lcd_lyc_request:
 		IFGT	GAMEBOY_DEBUG
 		bsr.w	debug_blank
 		ENDIF
 
 		bset.b	#1,$0f(a6)			;lcd occurred.
 		bset.b	#2,irq_status_flags		;lyc occurred.
-		bra.s	kcmp_up				;skip vbr.
+		rts
 
-klyc_clear:	bclr.b	#2,$41(a6)			;no coincidence.
-kcmp_up:	rts
+lcd_lyc_clear:	bclr.b	#2,$41(a6)			;no coincidence.
+lcd_lyc_done:	rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		mappers
@@ -832,9 +867,18 @@ kcmp_up:	rts
 
 		cnop	0,4
 mbc1_rom_switch:
-;		tst.b	mbc1_status
-;		bne.s	mbc1_in_4_32
+		cmp.l	#$3f,rom_banks_mask
+		blo.s	mbc1_rom_switch_legacy
+		and.l	#$1f,d6
+		bne.s	mbc1_rom_low_valid
+		moveq.l	#1,d6
+mbc1_rom_low_valid:
+		bsr.w	mbc1_active_rom_bank
+		and.l	#$60,d7
+		or.l	d7,d6
+		bra.s	mbc1_rom_switch_in_limit
 
+mbc1_rom_switch_legacy:
 		and.l	#$ff,d6
 mbc1_in_16_8:	cmp.l	rom_banks_mask,d6
 		ble.s	mbc1_rom_switch_in_limit
@@ -869,9 +913,6 @@ pc_in_ram_mbc1:	add.l	a2,a0					;old ram address base.
 		ENDIF
 
 		cnop	0,4
-mbc1_in_4_32:	rts
-
-		cnop	0,4
 mbc1_rom_mode_select:
 		and.b	#%1,d6
 		move.b	d6,mbc1_status
@@ -879,15 +920,27 @@ mbc1_rom_mode_select:
 
 		cnop	0,4
 mbc1_rom_switch_two_address_lines:
-		tst.b	mbc1_status
-		bne.s	mbc1_rom_switch_two_address_lines_4_32
+		cmp.l	#$3f,rom_banks_mask
+		blo.s	mbc1_rom_high_done
+		and.l	#3,d6
+		lsl.w	#5,d6
+		bsr.s	mbc1_active_rom_bank
+		and.l	#$1f,d7
+		bne.s	mbc1_rom_high_low_valid
+		moveq.l	#1,d7				;Initial view 0 also shows bank 1 at $4000.
+mbc1_rom_high_low_valid:
+		or.l	d7,d6
+		and.l	rom_banks_mask,d6
+		bra.w	mbc1_rom_switch_in_limit
+mbc1_rom_high_done:
+		rts
 
-								;support for 1 & 2
-								;MB cartridges!!!
-		rts						;not here. ;)
-
-		cnop	0,4
-mbc1_rom_switch_two_address_lines_4_32:
+; The active view encodes both effective bank fields and is already saved in GBS.
+mbc1_active_rom_bank:
+		move.l	bank_address,d7
+		sub.l	rom_32k,d7
+		lsr.l	#8,d7
+		lsr.l	#7,d7
 		rts
 
 		cnop	0,4
@@ -1009,15 +1062,14 @@ mbc5_ramg:	rts						;external ram on/off.
 
 		cnop	0,4
 mbc5_romb0:	move.b	d6,mbc5_rom_bank0
+		bra.s	mbc5_rom_switch
+
+		cnop	0,4
+mbc5_romb1:	and.b	#1,d6
+		move.b	d6,mbc5_rom_bank1
+mbc5_rom_switch:
 		move.l	mbc5_rom_bank,d6
-
-mbc5_romb0_switch:
-		cmp.l	rom_banks_mask,d6
-		ble.s	mbc5_romb0_switch_in_limit
-		sub.l	rom_banks_mask,d6
-		bra.s	mbc5_romb0_switch
-
-mbc5_romb0_switch_in_limit:
+		and.l	rom_banks_mask,d6
 
 		IFGT	GAMEBOY_DEBUG
 		move.b	d6,rom_bank_activated
@@ -1034,51 +1086,13 @@ mbc5_romb0_switch_in_limit:
 		ELSE
 		sub.l	z80_pc_base,a0
 		move.w	a0,d7
-		blt.s	pc_in_ram_mbc5_0
+		blt.s	pc_in_ram_mbc5
 		add.l	d6,a0
 		move.l	d6,z80_pc_base
 		rts
 
 		cnop	0,4
-pc_in_ram_mbc5_0:
-		add.l	a2,a0
-		rts
-		ENDIF
-
-		cnop	0,4
-mbc5_romb1:	move.b	d6,mbc5_rom_bank1
-		move.l	mbc5_rom_bank,d6
-
-mbc5_romb1_switch:
-		cmp.l	rom_banks_mask,d6
-		ble.s	mbc5_romb1_switch_in_limit
-		sub.l	rom_banks_mask,d6
-		bra.s	mbc5_romb1_switch
-
-mbc5_romb1_switch_in_limit:
-
-		IFGT	GAMEBOY_DEBUG
-		move.b	d6,rom_bank_activated
-		ENDIF
-
-		lsl.l	#8,d6
-		lsl.l	#7,d6					;d6 = d6 * $8000.
-		add.l	rom_32k,d6				;rom pointer.
-		move.l	d6,bank_address
-		move.l	d6,a3
-
-		IFEQ	Z80_MODE
-		bra.l	mbc_map_pc
-		ELSE
-		sub.l	z80_pc_base,a0
-		move.w	a0,d7
-		blt.s	pc_in_ram_mbc5_1
-		add.l	d6,a0
-		move.l	d6,z80_pc_base
-		rts
-
-		cnop	0,4
-pc_in_ram_mbc5_1:
+pc_in_ram_mbc5:
 		add.l	a2,a0
 		rts
 		ENDIF
@@ -1286,9 +1300,7 @@ reti_back:	tst.b	i_flag
 		clr.b	z80_halt_bug
 		subq.l	#1,a0					;EI; HALT returns to HALT.
 reti_stack_pc:
-		IFEQ	Z80_MODE
 		subq.l	#5,a5
-		ENDIF
 		move.l	a0,d6					;stack the pc.
 		sub.l	z80_pc_base,d6
 		move.b	#1,i_flag				;disable interrupts.

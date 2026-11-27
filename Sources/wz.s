@@ -1865,11 +1865,8 @@ save_battery_ram:
 
 		move.b	battery_xpk_status,d6		;xpk status.
 		move.l	cartridge,a0
-		moveq.l	#0,d1
-		move.b	$149(a0),d1
-		lea	ram_size_list,a1
-		and.b	#%111,d1
-		move.l	(a1,d1.l*4),d7
+		bsr.w	battery_ram_size
+		beq.s	save_battery_ram_exit
 
 		cmp.l	#8192,d7
 		beq.s	save_one_bank
@@ -1900,6 +1897,41 @@ save_the_banks:	bsr.w	save_file
 save_battery_ram_exit:
 		rts
 
+battery_ram_size:
+		bsr.w	cart_ram_size_code
+		moveq.l	#0,d7
+		cmp.b	#6,d0
+		beq.s	battery_ram_size_done
+		lea	ram_size_list,a1
+		move.l	(a1,d0.l*4),d7
+battery_ram_size_done:
+		tst.l	d7
+		rts
+
+; Return the RAM header index in d0, or 6 for an unsupported value.
+cart_ram_size_code:
+		moveq.l	#0,d0
+		move.b	$149(a0),d0
+		cmp.b	#3,d0
+		bls.s	cart_ram_size_done
+		cmp.b	#5,d0
+		bhi.s	cart_ram_size_invalid
+		cmp.b	#$1a,$147(a0)
+		beq.s	cart_ram_size_done
+		cmp.b	#$1b,$147(a0)
+		beq.s	cart_ram_size_done
+		; MBC5 rumble uses selector bit 3 for the motor, leaving eight banks.
+		cmp.b	#5,d0
+		bne.s	cart_ram_size_invalid
+		cmp.b	#$1d,$147(a0)
+		beq.s	cart_ram_size_done
+		cmp.b	#$1e,$147(a0)
+		beq.s	cart_ram_size_done
+cart_ram_size_invalid:
+		moveq.l	#6,d0
+cart_ram_size_done:
+		rts
+
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		load battery ram
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -1920,11 +1952,8 @@ load_battery_ram:
 
 		move.l	memory_banks,a5
 		move.l	cartridge,a0
-		moveq.l	#0,d1
-		move.b	$149(a0),d1
-		lea	ram_size_list,a1
-		and.b	#%111,d1
-		move.l	(a1,d1.l*4),d7
+		bsr.w	battery_ram_size
+		beq.s	load_battery_ram_exit
 		bsr.w	load_file
 		tst.l	d0
 		bne.s	load_battery_ram_exit		;error!
@@ -1971,6 +2000,8 @@ battery_existence:
 		cmp.b	#$13,d0
 		beq.s	battery_existence_exit
 		cmp.b	#$1b,d0
+		beq.s	battery_existence_exit
+		cmp.b	#$1e,d0
 		beq.s	battery_existence_exit
 		cmp.b	#$ff,d0
 		beq.s	battery_existence_exit
@@ -3307,7 +3338,11 @@ rom_no_54:	move.b	#9,d0				;illegal rom size!
 rom_size_ok:	lea	rom_banks_list,a5
 		move.l	(a5,d0.w*4),rom_banks_mask
 		move.l	(a2,d0.l*4),d2			;d2 = rom size text.
-		move.b	$149(a0),d0			;d0 = ram size.
+		bsr.w	cart_ram_size_code
+		cmp.b	#6,d0
+		bne.s	ram_size_ok
+		move.b	#1,cartridge_status
+ram_size_ok:
 		moveq.l	#0,d5
 		lea	ram_banks_list,a1
 		move.b	(a1,d0.l),d5
@@ -3316,11 +3351,7 @@ rom_size_ok:	lea	rom_banks_list,a5
 		move.b	(a1,d0.l),d5
 		move.l	d5,ram_banks_mask
 		lea	ram_table,a1
-		cmp.w	#5,d0
-		blt.s	ram_size_ok
-		move.b	#5,d0				;illegal ram size!
-		move.b	#1,cartridge_status		;error!!!
-ram_size_ok:	move.l	(a1,d0.l*4),d3			;d3 = ram size text.
+		move.l	(a1,d0.l*4),d3			;d3 = ram size text.
 
 		move.b	$147(a0),d0			;d0 = cartridge type.
 		move.l	#map_inv,battery_ptr
@@ -3566,10 +3597,10 @@ gbs_load:	move.l	xpk_master_base,d0
 		bne.w	quit_xpk_lss			;no. it's something else.
 
 		move.l	xf_ULen(a0),d0
-		cmp.l	#$8000+$8000+1024,d0
-		bgt.w	quit_lss_e			;too big a file!
+		cmp.l	#$2000*16+$8000+1024,d0
+		bhi.w	quit_lss_e			;too big a file!
 
-		move.l	d0,file_length			;uncompressed length.
+		move.l	d0,snapshot_size		;uncompressed length.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		unpack the snapshot file
@@ -3655,8 +3686,9 @@ no_xpk_lss:	move.l	dos_base,a6
 		move.l	snapshot_area,d2
 		move.l	snapshot_size,d3
 		cmp.l	#$2000*16+$8000+1024,d3
-		bgt.w	ssload_error
+		bhi.w	ssload_error
 		jsr	Read(a6)
+		move.l	d0,snapshot_size
 
 		move.l	file_hd,d1
 		jsr	Close(a6)
@@ -3666,6 +3698,19 @@ no_xpk_lss:	move.l	dos_base,a6
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 load_ok_lss:	move.l	snapshot_area,a0
+		move.l	snapshot_size,d1
+		cmp.l	#56+$8000+4+1,d1		;header, RAM, bank count and IME.
+		blt.w	ssload_error_bad_ram
+		move.l	56+$8000(a0),d0
+		cmp.l	#16,d0
+		bhi.w	ssload_error_bad_ram
+		cmp.l	#1,d0
+		bls.s	gbs_ram_size_ok
+		mulu.l	#$2000,d0
+		add.l	#56+$8000+4+1,d0
+		cmp.l	d0,d1
+		blo.w	ssload_error_bad_ram
+gbs_ram_size_ok:
 		lea	z80_registers,a1
 
 		move.b	(a0)+,z80_halt
@@ -3695,11 +3740,34 @@ z80_reg_rest:	move.l	(a0)+,(a1)+
 ;		move.l	(a0)+,z80_cycles
 		addq.l	#4,a0
 
+gbs_read_rom_bank:
 		move.l	(a0)+,d0
+		tst.b	mbc5_cartridge
+		beq.s	gbs_rom_bank_ready
+		cmp.l	#$4d424335,28-52(a0)		;"MBC5" in the old status field.
+		beq.s	gbs_mbc5_bank_ready
+		tst.l	d0
+		beq.s	gbs_mbc5_legacy_start
+		cmp.b	#$19,mbc5_cartridge
+		bne.s	gbs_mbc5_bank_ready
+		sub.l	#$8000,d0			;type $19 duplicated bank 0 in slot 1.
+		bra.s	gbs_mbc5_bank_ready
+gbs_mbc5_legacy_start:
+		cmp.b	#$19,mbc5_cartridge
+		beq.s	gbs_mbc5_bank_ready
+		move.l	#$8000,d0			;other MBC5 types used bank 1 in slot 0.
+gbs_mbc5_bank_ready:
+		move.l	d0,d7
+		lsr.l	#8,d7
+		lsr.l	#7,d7
+		move.l	d7,mbc5_rom_bank
+gbs_rom_bank_ready:
 		add.l	rom_32k,d0
 		move.l	d0,bank_address
+gbs_read_ram_bank:
 		move.l	(a0)+,ram_bank_no
-		and.l	#%11,ram_bank_no
+		move.l	ram_banks_mask,d7
+		and.l	d7,ram_bank_no
 
 		move.l	d0,(a3)				;install rom pointer   (a3).
 		move.l	a0,-(SP)
@@ -3728,16 +3796,17 @@ pc_accuired:	moveq.l	#0,d1
 		move.w	#($10000-$8000)/4-1,d0
 mem_rest_I:	move.l	(a0)+,(a1)+
 		dbra	d0,mem_rest_I
+		or.b	#$c0,$ff00-$10000(a1)		;repair P1 from older snapshots.
 		bsr.w	gfx_cache_invalidate
 		tst.b	$ff40-$10000(a1)
 		spl	lcd_blank_phase		;legacy snapshots do not store LCD warm-up.
 		clr.b	lcd_blank_presented
 		clr.w	window_y_state		;legacy snapshots restart at scanline zero.
+		clr.b	lcd_start_line
 		bsr.w	dmg_unmapped_io
 		bsr.w	dmg_mirror_wram
 		bsr.w	sound_import_regs
-		IFEQ	Z80_MODE
-		clr.b	lcd_start_line
+		IFEQ	GAMEBOY_USERS
 		bsr.l	sound_div_rebase
 		ENDIF
 
@@ -3760,6 +3829,11 @@ no_banks_rest:	move.b	(a0)+,i_flag			;interrupt flag.
 		bsr.w	print_status_middle
 
 ssload_error:	rts
+
+ssload_error_bad_ram:
+		lea	status_bad_gbs_ram_txt,a5
+		bsr.w	print_status_middle
+		rts
 
 ssload_error_file_not_found:
 		lea	status_file_not_found_txt,a5
@@ -3865,8 +3939,12 @@ gbs_save_encode:move.l	key_file,d0
 		move.l	d4,(a0)+			;ccr stored  (d4).
 		move.l	d5,(a0)+			;sp stored   (d5).
 
-		addq.l	#4,a0				;compability fix.
-							;(old z80_status.L).
+		clr.l	(a0)				;old z80_status field.
+		tst.b	mbc5_cartridge
+		beq.s	gbs_save_rom_layout_done
+		move.l	#$4d424335,(a0)			;"MBC5": bank offset uses the corrected layout.
+gbs_save_rom_layout_done:
+		addq.l	#4,a0
 ;		move.l	lcd_status,(a0)+
 ;		move.l	timer_status,(a0)+
 ;		move.l	debug_status,(a0)+
@@ -3899,7 +3977,7 @@ mem_copy_sound:
 		cmp.l	#1,ram_banks
 		beq.s	no_banks_save			;no.
 
-		move.l	ram_banks,(a0)+			;banks marker (4/16).
+		move.l	ram_banks,(a0)+			;banks marker (4/8/16).
 		move.l	memory_banks,a1
 		move.l	#$2000/4,d0
 		mulu.l	ram_banks,d0
@@ -4048,7 +4126,13 @@ load_file:	move.l	xpk_master_base,d0
 
 		move.l	xf_ULen(a0),file_length		;uncompressed length.
 		cmp.l	file_length,d7
+		beq.s	load_battery_xpk_size_ok
+		; Older versions used 128 KiB for the 64 KiB header code.
+		cmp.l	#$10000,d7
 		bne.w	load_file_quit_xpk_e
+		cmp.l	#$20000,file_length
+		bne.w	load_file_quit_xpk_e
+load_battery_xpk_size_ok:
 		add.l	#XPK_MARGIN,file_length		;xpk margin area.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -8660,26 +8744,24 @@ rom_size_okay:	and.l	#$ffff,d7
 		move.l	a0,cartridge
 		move.l	a0,a1
 		move.l	rom_32k,a2
+		move.l	a2,bank_address
+		clr.b	mbc5_cartridge
 
 		cmp.b	#$19,$147(a0)
-		bne.s	rom_mbc_is_not_5
-
-		move.w	#$4000/4-1,d1
-rom_mbc5_32k_0:	move.l	(a1)+,(a2)+
-		dbra	d1,rom_mbc5_32k_0
-		move.l	a0,a1
-		move.w	#$4000/4-1,d1
-rom_mbc5_32k_1:	move.l	(a1)+,(a2)+
-		dbra	d1,rom_mbc5_32k_1
-
-		bra.s	rom_bank_0_done
+		blo.s	rom_mbc_is_not_5
+		cmp.b	#$1e,$147(a0)
+		bhi.s	rom_mbc_is_not_5
+		move.b	$147(a0),mbc5_cartridge
+		; MBC5 has [0,0] in slot 0 but starts in slot 1 ([0,1]).
+		add.l	#$8000,bank_address
+		bra.s	rom_32k_n_more
 
 rom_mbc_is_not_5:
 		move.w	#$8000/4-1,d1
 rom_32k_0:	move.l	(a1)+,(a2)+
 		dbra	d1,rom_32k_0
 
-rom_bank_0_done:subq.l	#2,d7
+		subq.l	#2,d7
 		beq.s	rom_32k_created
 
 		sub.l	#$4000,a1
@@ -8697,8 +8779,7 @@ rom_32k_n:	move.l	(a1)+,(a2)+
 		subq.l	#1,d7
 		bne.s	rom_32k_n_more
 
-rom_32k_created:move.l	rom_32k,bank_address		;use area b0, b1.
-		moveq.l	#0,d0				;no errors.
+rom_32k_created:moveq.l	#0,d0				;no errors.
 		rts
 
 load_error_not_selected:
@@ -8831,10 +8912,16 @@ compute_jmp_lst:move.l	a0,d0
 		move.l	#mapper_huc1_ram_battery,a2
 		bra.s	mapper_ok_n
 
-no_huc1:	move.l	(a2,d0.l*4),a2			;mapper selected.
+no_huc1:	cmp.b	#$1e,d0
+		bls.s	mapper_lookup
+		moveq.l	#0,d0
+mapper_lookup:	move.l	(a2,d0.l*4),a2			;mapper selected.
 
-mapper_ok_n:	move.b	$149(a0),d0			;d0 = amount of ram.
-		and.b	#%11,d0				;max values.
+mapper_ok_n:	bsr.l	cart_ram_size_code
+		cmp.b	#6,d0
+		bne.s	mapper_ram_size_ok
+		moveq.l	#0,d0				;unsupported size: no bank switching.
+mapper_ram_size_ok:
 		move.l	(a2,d0.l*4),a2			;list selected.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -9084,10 +9171,8 @@ dmg_boot_wram:	move.l	d1,d4
 		jsr	CacheClearU(a6)			;any help?
 
 		bsr.w	z80_start			;do the inits.
-		IFEQ	Z80_MODE
 		IFEQ	GAMEBOY_USERS
 		bsr.w	dmg_boot_lcd_tail
-		ENDIF
 		ENDIF
 		bsr.w	push_z80			;push all the registers.
 
@@ -9098,8 +9183,6 @@ dmg_boot_wram:	move.l	d1,d4
 lcd_slice_mode:	macro
 		and.b	#$fc,$41(a6)
 		move.l	h_values_indexed,a5
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		moveq.l	#0,d6
 		tst.b	lcd_blank_phase
 		bmi.s	lcd_mode_set\@
@@ -9107,19 +9190,13 @@ lcd_slice_mode:	macro
 		tst.b	lcd_start_line
 		bne.s	lcd_mode_set\@
 		ENDIF
-		ENDIF
-		ENDIF
 		move.b	(a5),d6
 lcd_mode_set\@:	or.b	d6,$41(a6)
 		endm
 
 lcd_restart_check: macro
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		tst.b	lcd_start_line
 		bmi.w	lcd_restart
-		ENDIF
-		ENDIF
 		endm
 
 cartridge_loop:
@@ -9128,14 +9205,9 @@ cartridge_loop:
 		ENDIF
 
 		bsr.w	pull_z80			;pull all the registers.
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		tst.b	lcd_start_line
 		bpl.s	lcd_frame_start
 lcd_restart:	move.b	#1,lcd_start_line
-		clr.b	irq_status_flags
-		ENDIF
-		ENDIF
 
 lcd_frame_start:
 		move.l	#h_values,h_values_indexed
@@ -9165,42 +9237,10 @@ no_window_y_check:
 
 cmp_blank:	btst.b	#7,$40(a6)			;lcd enabled?
 		beq.s	cmp_up				;no.
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		tst.b	lcd_start_line
-		bne.s	cmp_up				;no coincidence on the LCD startup line.
-		ENDIF
-		ENDIF
+		bne.s	cmp_up				;already compared on the LCD-on write.
 
-		btst.b	#1,irq_status_flags		;vbr effect?
-		beq.s	cmp_blank_no_filtering
-		move.l	gb_scanlines,d7
-;		beq.s	cmp_up				;$00 is off limits.
-		cmp.l	#$91,d7
-		bge.s	cmp_up				;$91-$99 are off limits, too.
-
-cmp_blank_no_filtering:
-		move.b	$45(a6),d7			;d7 = ly compare / lyc.
-		cmp.b	$44(a6),d7
-		bne.s	lyc_clear			;not the same.
-		bset.b	#2,$41(a6)			;coincidence occurred.
-
-		btst.b	#6,$41(a6)			;interrupt?
-		beq.s	cmp_up				;nope. disabled.
-
-		btst.b	#1,$ff(a6)			;lcd controller irq enabled?
-		beq.s	cmp_up				;no.
-
-cmp_starts:
-		IFGT	GAMEBOY_DEBUG
-		bsr.w	debug_blank
-		ENDIF
-
-		bset.b	#1,$0f(a6)			;lcd occurred.
-		bset.b	#2,irq_status_flags		;lyc occurred.
-		bra.s	cmp_up				;skip vbr.
-
-lyc_clear:	bclr.b	#2,$41(a6)			;no coincidence.
+		bsr.w	lcd_lyc_compare
 cmp_up:
 
 		ENDIF
@@ -9226,7 +9266,7 @@ input_poll_scanline:
 
 no_input_this_time:
 		IFLE	Z80_MODE
-		IFNE	Z80_MODE-GAMEBOY_USERS
+		IFNE	GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.s	no_timer_update_0		;0! no update.
@@ -9239,6 +9279,8 @@ no_timer_update_0:
 
 		IFLE	Z80_MODE
 
+		tst.b	lcd_start_line
+		bne.s	no_lcd_irq_emulation_0		;startup mode 0 is not HBlank.
 		cmp.l	#143,gb_scanlines
 		bne.s	no_vbr_lcd
 		btst.b	#2,irq_status_flags		;lyc occurred?
@@ -9264,10 +9306,6 @@ vbr_blank:	btst.b	#7,$40(a6)			;lcd operation?
 
 		clr.w	window_y_state
 		bsr.w	lcd_blank_vblank
-		IFNE	Z80_MODE
-		btst.b	#0,$ff(a6)			;vbr irq?
-		beq.s	no_vbr_blank			;no. quit.
-		ENDIF
 
 		bset.b	#1,irq_status_flags
 		bset.b	#0,$0f(a6)			;vbr occurred.
@@ -9291,16 +9329,17 @@ no_vbr_blank:	move.b	$0f(a6),d7
 dehalting_z80_0:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
+		IFNE	Z80_MODE
+		move.b	#5,z80_irq_cycles
+		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_0
 
-		IFLE	Z80_MODE
 		btst	#1,d7
 		bne.w	prior_ii_0
 		btst	#2,d7
 		bne.w	prior_iii_0
-		ENDIF
 
 		btst	#3,d7
 		bne.w	prior_iv_0
@@ -9325,7 +9364,7 @@ cpu_halt_is_on_0:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
-		IFNE	Z80_MODE-GAMEBOY_USERS
+		IFNE	GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_1		;0! no update.
@@ -9337,16 +9376,17 @@ no_timer_update_1:
 		cmp.l	#$99,gb_scanlines
 		bne.s	no_ly_fix
 		clr.b	$44(a6)				;scanline zero (short last ly).
+		IFLE	Z80_MODE
+		btst.b	#7,$40(a6)
+		beq.s	no_ly_fix
+		bsr.w	lcd_lyc_compare			;LY=0 while still in VBlank.
+		ENDIF
 
 no_ly_fix:	subq.b	#1,transfer_counter
 		bhi.w	no_transfer
 		blt.w	no_transfer_reset
 
 		bclr.b	#7,$2(a6)
-
-		btst.b	#3,$ff(a6)
-		beq.w	no_transfer
-
 		bset.b	#3,$f(a6)
 		move.b	#$ff,$1(a6)
 
@@ -9389,12 +9429,8 @@ no_transfer_reset:
 		clr.b	transfer_counter
 
 no_transfer:
-		IFNE	Z80_MODE
-		add.b	#1,$04(a6)			;legacy divider.
-		ELSE
 		IFNE	GAMEBOY_USERS
 		add.b	#1,$04(a6)
-		ENDIF
 		ENDIF
 
 		lcd_slice_mode 0
@@ -9427,16 +9463,17 @@ no_lcd_irq_emulation_1:
 dehalting_z80_1:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
+		IFNE	Z80_MODE
+		move.b	#5,z80_irq_cycles
+		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_1
 
-		IFLE	Z80_MODE
 		btst	#1,d7
 		bne.w	prior_ii_1
 		btst	#2,d7
 		bne.w	prior_iii_1
-		ENDIF
 
 		btst	#3,d7
 		bne.w	prior_iv_1
@@ -9462,7 +9499,7 @@ cpu_halt_is_on_1:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
-		IFNE	Z80_MODE-GAMEBOY_USERS
+		IFNE	GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_2		;0! no update.
@@ -9488,16 +9525,17 @@ no_timer_update_2:
 dehalting_z80_2:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
+		IFNE	Z80_MODE
+		move.b	#5,z80_irq_cycles
+		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_2
 
-		IFLE	Z80_MODE
 		btst	#1,d7
 		bne.w	prior_ii_2
 		btst	#2,d7
 		bne.w	prior_iii_2
-		ENDIF
 
 		btst	#3,d7
 		bne.w	prior_iv_2
@@ -9544,7 +9582,7 @@ xan_drawed_2:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
-		IFNE	Z80_MODE-GAMEBOY_USERS
+		IFNE	GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_3		;0! no update.
@@ -9553,12 +9591,8 @@ no_timer_update_3:
 		ENDIF
 		ENDIF
 
-		IFNE	Z80_MODE
-		add.b	#1,$04(a6)			;legacy divider.
-		ELSE
 		IFNE	GAMEBOY_USERS
 		add.b	#1,$04(a6)
-		ENDIF
 		ENDIF
 
 		lcd_slice_mode 0
@@ -9591,16 +9625,17 @@ no_lcd_irq_emulation_3:
 dehalting_z80_3:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
+		IFNE	Z80_MODE
+		move.b	#5,z80_irq_cycles
+		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_3
 
-		IFLE	Z80_MODE
 		btst	#1,d7
 		bne.w	prior_ii_3
 		btst	#2,d7
 		bne.w	prior_iii_3
-		ENDIF
 
 		btst	#3,d7
 		bne.w	prior_iv_3
@@ -9626,7 +9661,7 @@ cpu_halt_is_on_3:
 		add.l	#$ff00,a6
 
 		IFLE	Z80_MODE
-		IFNE	Z80_MODE-GAMEBOY_USERS
+		IFNE	GAMEBOY_USERS
 		move.b	$07(a6),d7			;d7 = timer control byte.
 		btst	#2,d7				;0 = stopped / 1 = counting.
 		beq.w	no_timer_update_4		;0! no update.
@@ -9652,16 +9687,17 @@ no_timer_update_4:
 dehalting_z80_4:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
+		IFNE	Z80_MODE
+		move.b	#5,z80_irq_cycles
+		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_4
 
-		IFLE	Z80_MODE
 		btst	#1,d7
 		bne.w	prior_ii_4
 		btst	#2,d7
 		bne.w	prior_iii_4
-		ENDIF
 
 		btst	#3,d7
 		bne.w	prior_iv_4
@@ -9709,13 +9745,9 @@ next_scanline:	move.l	a2,a6
 		add.l	#$ff00,a6
 
 		and.b	#%10,irq_status_flags		;clear oam and lyc flag.
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		clr.b	lcd_start_line
 		btst.b	#7,$40(a6)
 		beq.w	next_sline
-		ENDIF
-		ENDIF
 		move.b	d7,$44(a6)			;next scanline (address).
 		bra.w	next_sline			;next horizontal line.
 
@@ -10165,10 +10197,8 @@ sound_length_silence:
 sound_length_silence_exit:
 		rts
 
-		IFEQ	Z80_MODE
 ; LCD-on ends the old slice at the write, without resetting DIV/TIMA.
 lcd_start_request:
-		st	lcd_start_line
 		tst.b	sound_div_active
 		beq.s	lcd_start_request_done
 		bsr.l	sound_div_sync
@@ -10188,6 +10218,7 @@ lcd_start_irq_check:
 
 ; The timed-read caller has already debited the bus cycle. Project into
 ; the next slice only if that cycle starts past the current boundary.
+		IFEQ	Z80_MODE
 lcd_stat_read:
 		tst.b	sound_div_active
 		beq.s	lcd_stat_read_raw
@@ -10216,6 +10247,7 @@ lcd_stat_read_raw:
 		moveq.l	#0,d6
 		move.b	$ff41(a2),d6
 		rts
+		ENDIF
 
 ; At cartridge entry LY already reads 0, but the LCD is still in VBlank.
 ; Run the last 52 dots of line 153 before the first full scanline.
@@ -10245,6 +10277,7 @@ sound_cpu_begin_slice:
 		ble.w	sound_cpu_debt
 		move.l	d6,sound_slice_tail
 sound_cpu_run:
+		IFEQ	Z80_MODE
 		moveq.l	#0,d7
 		move.w	sound_div_counter,d7
 		and.w	#$1fff,d7
@@ -10256,10 +10289,15 @@ sound_cpu_run:
 		bls.s	sound_cpu_budget
 		move.l	d7,d6
 sound_cpu_budget:
+		ELSE
+		move.l	sound_slice_tail,d6
+		ENDIF
+		IFLE	Z80_MODE
 		btst.b	#2,$ffff(a2)
 		beq.s	sound_cpu_no_timer_limit
 		bsr.w	timer_slice_limit
 sound_cpu_no_timer_limit:
+		ENDIF
 		sub.l	d6,sound_slice_tail
 		move.l	d6,sound_div_budget
 		move.l	d6,a5
@@ -10274,6 +10312,7 @@ sound_cpu_no_timer_limit:
 		move.l	d7,a5
 		moveq.l	#0,d7
 sound_cpu_check_irq:
+		IFLE	Z80_MODE
 		btst.b	#2,$ff0f(a2)
 		beq.s	sound_cpu_fetch
 		btst.b	#2,$ffff(a2)
@@ -10283,6 +10322,7 @@ sound_cpu_check_irq:
 		bne.s	sound_cpu_fetch
 		bsr.l	reti_back
 		bra.s	sound_cpu_ei
+		ENDIF
 sound_cpu_fetch:
 		tst.b	z80_halt
 		bne.s	sound_cpu_idle
@@ -10336,37 +10376,53 @@ sound_div_remaining:
 		move.l	d7,sound_div_budget
 		sub.l	d7,d6
 		lsl.l	#2,d6
+		IFEQ	Z80_MODE
 		add.l	d6,sound_wave_time
 		bpl.s	sound_div_wave_done
 		bsr.l	sound_wave_rebase_time
 sound_div_wave_done:
+		ENDIF
+		IFLE	Z80_MODE
 		move.w	sound_div_counter,d7
+		ENDIF
 		add.w	d6,sound_div_counter
 		move.b	sound_div_counter,$ff04(a2)
+		IFLE	Z80_MODE
 		tst.w	timer_shift			;shift and reload phase are adjacent bytes.
 		beq.s	sound_div_apu_edge
 		bsr.w	timer_advance
 sound_div_apu_edge:
+		ENDIF
+		IFEQ	Z80_MODE
 		btst	#12,d7
 		beq.s	sound_div_sync_pop
 		btst.b	#4,sound_div_counter
 		bne.s	sound_div_sync_pop
 		bsr.s	sound_frame_edge
 sound_div_sync_pop:
+		ENDIF
 		movem.l	(SP)+,d6-d7/a6
 sound_div_sync_done:
 		rts
 
 sound_div_reset:
 		bsr.s	sound_div_sync
+		IFLE	Z80_MODE
 		bsr.w	timer_div_edge
+		ENDIF
+		IFEQ	Z80_MODE
 		btst.b	#4,sound_div_counter
 		beq.s	sound_div_clear
 		clr.w	sound_div_counter
 		bra.s	sound_frame_edge
 sound_div_clear:clr.w	sound_div_counter
 		rts
+		ELSE
+		clr.w	sound_div_counter
+		rts
+		ENDIF
 
+		IFEQ	Z80_MODE
 sound_frame_edge:
 		btst.b	#7,$ff26(a2)
 		beq.s	sound_frame_done
@@ -10379,9 +10435,11 @@ sound_frame_edge:
 		beq.l	sound_sweep_clock
 sound_frame_done:
 		rts
+		ENDIF
 
 ; d6 = elapsed T-cycles, d7.w = old divider. Count the falling edges in
 ; bulk, stopping only at overflows to account for the delayed reload.
+		IFLE	Z80_MODE
 timer_advance:
 		tst.l	d6
 		bne.s	timer_advance_nonzero
@@ -10539,24 +10597,29 @@ timer_replan:
 		clr.l	sound_div_budget
 timer_replan_done:
 		rts
+		ENDIF
 
 sound_div_rebase:
 		move.l	a0,-(SP)
 		move.l	gb_memory,a0
 		clr.w	sound_div_counter
 		move.b	$ff04(a0),sound_div_counter
-		clr.b	sound_frame_phase
 		clr.b	sound_div_active
-		clr.b	timer_phase
+		clr.b	z80_irq_cycles
 		clr.l	z80_slice_debt
+		IFLE	Z80_MODE
+		clr.b	timer_phase
 		move.l	d6,-(SP)
 		move.b	$ff07(a0),d6
 		bsr.w	timer_configure
 		move.l	(SP)+,d6
+		ENDIF
+		IFEQ	Z80_MODE
+		clr.b	sound_frame_phase
 		bsr.l	sound_wave_reset
+		ENDIF
 		move.l	(SP)+,a0
 		rts
-		ENDIF
 
 		ENDIF
 
@@ -10568,9 +10631,7 @@ gb_memory_at_start:
 		clr.b	lcd_blank_phase
 		clr.b	lcd_blank_presented
 		clr.w	window_y_state
-		IFEQ	Z80_MODE
 		clr.b	lcd_start_line
-		ENDIF
 		move.l	gb_memory,a0
 		add.l	#$ff00,a0
 
@@ -10647,10 +10708,8 @@ gb_memory_at_start:
 		clr.b	sound_IV_length
 		move.b	#36,sound_length_div
 		bsr.w	sound_import_regs
-		IFEQ	Z80_MODE
 		bsr.l	sound_div_rebase
 		move.w	#$abcc,sound_div_counter	;DMG divider phase at PC=$0100.
-		ENDIF
 		ENDIF
 
 		clr.b	irq_status_flags
@@ -10677,11 +10736,12 @@ gb_memory_at_start:
 		clr.l	freq_storage
 		rts
 
-; CPU reads use the RAM image directly, so seed the unmapped bytes on
-; both reset and GBS restore. The I/O write table ignores these addresses.
+; CPU reads use the RAM image directly. Seed unmapped bytes and normalize
+; SC readback on both reset and GBS restore.
 dmg_unmapped_io:
 		move.l	gb_memory,a1
 		add.l	#$ff00,a1
+		or.b	#$7e,$02(a1)
 		moveq.l	#-1,d0
 		move.b	d0,$03(a1)
 		move.l	d0,$08(a1)
@@ -11225,10 +11285,9 @@ no_chnlIV_no_no:bra.w	sfx_back
 ;		execute different interrupts
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-prior_i_0:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_0			;no.
-
-		bclr.b	#0,$0f(a6)
+; LCDC gates request generation, not service of pending IF bits.
+; WARP skips periodic STAT/timer updates but still services pending requests.
+prior_i_0:	bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11244,11 +11303,7 @@ prior_i_0:	btst.b	#7,$40(a6)			;lcd on?
 		clr.b	z80_halt
 		bra.w	no_interrupts_0
 
-		IFLE	Z80_MODE
-prior_ii_0:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_0			;no.
-
-		bclr.b	#1,$0f(a6)
+prior_ii_0:	bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11279,7 +11334,6 @@ prior_iii_0:	bclr.b	#2,$0f(a6)
 		move.b	#1,i_flag
 		clr.b	z80_halt
 		bra.w	no_interrupts_0
-		ENDIF
 
 prior_iv_0:	bclr.b	#3,$0f(a6)
 
@@ -11313,10 +11367,7 @@ prior_v_0:	bclr.b	#4,$0f(a6)
 		clr.b	z80_halt
 		bra.w	no_interrupts_0
 
-prior_i_1:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_1			;no.
-
-		bclr.b	#0,$0f(a6)
+prior_i_1:	bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11332,11 +11383,7 @@ prior_i_1:	btst.b	#7,$40(a6)			;lcd on?
 		clr.b	z80_halt
 		bra.w	no_interrupts_1
 
-		IFLE	Z80_MODE
-prior_ii_1:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_1			;no.
-
-		bclr.b	#1,$0f(a6)
+prior_ii_1:	bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11367,7 +11414,6 @@ prior_iii_1:	bclr.b	#2,$0f(a6)
 		move.b	#1,i_flag
 		clr.b	z80_halt
 		bra.w	no_interrupts_1
-		ENDIF
 
 prior_iv_1:	bclr.b	#3,$0f(a6)
 
@@ -11401,10 +11447,7 @@ prior_v_1:	bclr.b	#4,$0f(a6)
 		clr.b	z80_halt
 		bra.w	no_interrupts_1
 
-prior_i_2:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_2			;no.
-
-		bclr.b	#0,$0f(a6)
+prior_i_2:	bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11420,11 +11463,7 @@ prior_i_2:	btst.b	#7,$40(a6)			;lcd on?
 		clr.b	z80_halt
 		bra.w	no_interrupts_2
 
-		IFLE	Z80_MODE
-prior_ii_2:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_2			;no.
-
-		bclr.b	#1,$0f(a6)
+prior_ii_2:	bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11455,7 +11494,6 @@ prior_iii_2:	bclr.b	#2,$0f(a6)
 		move.b	#1,i_flag
 		clr.b	z80_halt
 		bra.w	no_interrupts_2
-		ENDIF
 
 prior_iv_2:	bclr.b	#3,$0f(a6)
 
@@ -11489,10 +11527,7 @@ prior_v_2:	bclr.b	#4,$0f(a6)
 		clr.b	z80_halt
 		bra.w	no_interrupts_2
 
-prior_i_3:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_3			;no.
-
-		bclr.b	#0,$0f(a6)
+prior_i_3:	bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11508,11 +11543,7 @@ prior_i_3:	btst.b	#7,$40(a6)			;lcd on?
 		clr.b	z80_halt
 		bra.w	no_interrupts_3
 
-		IFLE	Z80_MODE
-prior_ii_3:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_3			;no.
-
-		bclr.b	#1,$0f(a6)
+prior_ii_3:	bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11543,7 +11574,6 @@ prior_iii_3:	bclr.b	#2,$0f(a6)
 		move.b	#1,i_flag
 		clr.b	z80_halt
 		bra.w	no_interrupts_3
-		ENDIF
 
 prior_iv_3:	bclr.b	#3,$0f(a6)
 
@@ -11577,10 +11607,7 @@ prior_v_3:	bclr.b	#4,$0f(a6)
 		clr.b	z80_halt
 		bra.w	no_interrupts_3
 
-prior_i_4:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_4			;no.
-
-		bclr.b	#0,$0f(a6)
+prior_i_4:	bclr.b	#0,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11596,11 +11623,7 @@ prior_i_4:	btst.b	#7,$40(a6)			;lcd on?
 		clr.b	z80_halt
 		bra.w	no_interrupts_4
 
-		IFLE	Z80_MODE
-prior_ii_4:	btst.b	#7,$40(a6)			;lcd on?
-		beq.w	no_interrupts_4			;no.
-
-		bclr.b	#1,$0f(a6)
+prior_ii_4:	bclr.b	#1,$0f(a6)
 
 		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
@@ -11631,7 +11654,6 @@ prior_iii_4:	bclr.b	#2,$0f(a6)
 		move.b	#1,i_flag
 		clr.b	z80_halt
 		bra.w	no_interrupts_4
-		ENDIF
 
 prior_iv_4:	bclr.b	#3,$0f(a6)
 
@@ -11670,12 +11692,8 @@ prior_v_4:	bclr.b	#4,$0f(a6)
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 lcd_irq_eh:
-		IFEQ	Z80_MODE
-		IFEQ	GAMEBOY_USERS
 		btst.b	#7,$40(a6)
 		beq.s	lcd_irq_quit
-		ENDIF
-		ENDIF
 		tst.b	d6
 		beq.s	lcd_h_blank
 		cmp.b	#1,d6
@@ -11689,9 +11707,12 @@ lcd_irq_eh:
 
 lcd_h_blank:	btst.b	#3,$41(a6)
 		beq.s	lcd_irq_quit
-		btst.b	#2,irq_status_flags		;after lyc?
+		btst.b	#6,$41(a6)			;LYC interrupt enabled?
+		beq.s	lcd_h_blank_request
+		btst.b	#2,$41(a6)			;if still matching, STAT is already high.
 		bne.s	lcd_irq_quit
 
+lcd_h_blank_request:
 		IFGT	GAMEBOY_DEBUG
 		bsr.w	debug_lcd
 		ENDIF
@@ -11832,9 +11853,6 @@ irq_timer:	and.l	#%11,d7				;save the frequency value.
 		move.b	d6,d7
 		lsl.l	#8,d7
 		lsl.l	#4,d7
-
-		btst.b	#2,$ff(a6)			;timer overflow?
-		beq.s	write_timer			;no. it's disabled. ;(
 
 		IFGT	GAMEBOY_DEBUG
 		bsr.w	debug_timer
@@ -13112,9 +13130,7 @@ h_values_indexed:
 
 lcd_blank_phase: dc.b	0		;0 = visible, -1 = off, 1 = first frame, 2 = its VBlank.
 lcd_blank_presented: dc.b 0
-		IFEQ	Z80_MODE
 lcd_start_line:	dc.b	0		;-1 = restart pending, 1 = LCD startup line.
-		ENDIF
 visual_frame:	dc.b	0				;used buffer number.
 		even
 
@@ -14904,7 +14920,7 @@ rom_table:	dc.l	rom_kb256,rom_kb512,rom_mb1,rom_mb2,rom_mb4,rom_mb8
 		dc.l	rom_mb9,rom_mb10,rom_mb12
 
 ram_table:	dc.l	ram_kb0,ram_kb16,ram_kb64,ram_kb256,ram_mb1
-		dc.l	ram_illegal
+		dc.l	ram_kb512,ram_illegal
 
 mapper_table:	dc.l	map_0,map_1,map_2,map_3,map_inv,map_5,map_6
 		dc.l	map_inv,map_8,map_9
@@ -15002,6 +15018,8 @@ ram_kb256:	dc.b	"32KB OF EXTERNAL RAM",0
 		even
 ram_mb1:	dc.b	"128KB OF EXTERNAL RAM",0
 		even
+ram_kb512:	dc.b	"64KB OF EXTERNAL RAM",0
+		even
 ram_illegal:	dc.b	"UNKNOWN AMOUNT OF RAM BANKS!",0
 		even
 rom_kb256:	dc.b	"2 ROM BANKS",0
@@ -15035,10 +15053,10 @@ rom_banks_list:	dc.l	2-1,4-1,8-1,16-1,32-1,64-1,128-1,256-1,512-1
 		dc.l	0,9-1,10-1,12-1
 		even
 
-ram_banks_list:	dc.b	0,1,1,4,16
+ram_banks_list:	dc.b	0,1,1,4,16,8,0
 		even
 ram_banks_mask_list:
-		dc.b	0,0,0,3,15
+		dc.b	0,0,0,3,15,7,0
 		even
 
 cartridge_name:	ds.b	32
@@ -15253,9 +15271,7 @@ ram_size_list:	dc.l	8192				;actually 0kb.
 		dc.l	8192
 		dc.l	32768
 		dc.l	131072
-		dc.l	131072
-		dc.l	131072
-		dc.l	131072
+		dc.l	65536
 
 mapper_list:	dc.l	mapper_na
 		dc.l	mapper_mbc1
@@ -15306,8 +15322,8 @@ mapper_huc1_ram_battery:
 mapper_huc1_0kb_ram:
 		dc.l	6-1,$2000-1
 		dc.l	rom_write
-		dc.l	mbc1_rom_switch
-		dc.l	mbc1_rom_switch_two_address_lines
+		dc.l	mbc1_rom_switch_legacy
+		dc.l	rom_write
 		dc.l	mbc1_rom_mode_select
 		dc.l	gb_mem_wr
 		dc.l	gb_mem_wr
@@ -15321,15 +15337,15 @@ mapper_huc1_2kb_ram:
 		dc.l	mbc1_ram_protection
 		dc.l	mbc1_ram_protection		;$2000.
 
-		dc.l	mbc1_rom_switch
-		dc.l	mbc1_rom_switch
-		dc.l	mbc1_rom_switch
-		dc.l	mbc1_rom_switch			;$4000.
+		dc.l	mbc1_rom_switch_legacy
+		dc.l	mbc1_rom_switch_legacy
+		dc.l	mbc1_rom_switch_legacy
+		dc.l	mbc1_rom_switch_legacy		;$4000.
 
-		dc.l	mbc1_rom_switch_two_address_lines
-		dc.l	mbc1_rom_switch_two_address_lines
-		dc.l	mbc1_rom_switch_two_address_lines
-		dc.l	mbc1_rom_switch_two_address_lines
+		dc.l	rom_write
+		dc.l	rom_write
+		dc.l	rom_write
+		dc.l	rom_write
 							;$6000.
 		dc.l	mbc1_rom_mode_select
 		dc.l	mbc1_rom_mode_select
@@ -15354,14 +15370,14 @@ mapper_huc1_2kb_ram:
 mapper_huc1_8kb_ram:
 		dc.l	4-1,$2000-1
 		dc.l	mbc1_ram_protection
-		dc.l	mbc1_rom_switch
-		dc.l	mbc1_rom_switch_two_address_lines
+		dc.l	mbc1_rom_switch_legacy
+		dc.l	rom_write
 		dc.l	mbc1_rom_mode_select
 
 mapper_huc1_32kb_ram:
 		dc.l	4-1,$2000-1
 		dc.l	mbc1_ram_protection
-		dc.l	mbc1_rom_switch
+		dc.l	mbc1_rom_switch_legacy
 		dc.l	mbc1_ram_switch_with_two_rom_address_lines
 		dc.l	mbc1_rom_mode_select
 
@@ -15376,8 +15392,9 @@ mapper_mbc5_rumble_sram_battery:
 		dc.l	mapper_mbc5_0kb_ram
 		dc.l	mapper_mbc5_2kb_ram
 		dc.l	mapper_mbc5_8kb_ram
-		dc.l	mapper_mbc5_32kb_ram
-		dc.l	mapper_mbc5_128kb_ram
+		dc.l	mapper_mbc5_banked_ram		;32 KiB
+		dc.l	mapper_mbc5_banked_ram		;128 KiB
+		dc.l	mapper_mbc5_banked_ram		;64 KiB
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		ROM+MBC5
@@ -15385,7 +15402,6 @@ mapper_mbc5_rumble_sram_battery:
 
 mapper_mbc5:
 mapper_mbc5_rumble:
-		dc.l	mapper_mbc5_0kb_ram
 		dc.l	mapper_mbc5_0kb_ram
 		dc.l	mapper_mbc5_0kb_ram
 		dc.l	mapper_mbc5_0kb_ram
@@ -15428,18 +15444,7 @@ mapper_mbc5_8kb_ram:
 		dc.l	rom_write
 		dc.l	rom_write			;$8000.
 
-mapper_mbc5_32kb_ram:
-		dc.l	8-1,$1000-1
-		dc.l	mbc5_ramg
-		dc.l	mbc5_ramg			;$2000.
-		dc.l	mbc5_romb0			;$3000.
-		dc.l	mbc5_romb1			;$4000.
-		dc.l	mbc5_ramb
-		dc.l	mbc5_ramb			;$6000.
-		dc.l	rom_write
-		dc.l	rom_write			;$8000.
-
-mapper_mbc5_128kb_ram:
+mapper_mbc5_banked_ram:
 		dc.l	8-1,$1000-1
 		dc.l	mbc5_ramg
 		dc.l	mbc5_ramg			;$2000.
@@ -16146,21 +16151,24 @@ sound_IV_length:	dc.b	0
 		even
 sound_III_length:	dc.w	0
 
-		IFEQ	Z80_MODE
 sound_div_counter: dc.w	0
-sound_frame_phase: dc.b	0
 sound_div_active: dc.b	0
 z80_irq_cycles:	dc.b	0
 		even
 sound_div_budget: dc.l	0
 sound_slice_tail: dc.l	0
 z80_slice_debt:	dc.l	0
+		IFLE	Z80_MODE
 timer_bit:	dc.w	0
 timer_mask:	dc.w	0
 timer_shift:	dc.b	0
 timer_phase:	dc.b	0			;0 = counting, 1 = overflow, 2 = reload.
+		ENDIF
+		IFEQ	Z80_MODE
+sound_frame_phase: dc.b	0
 sound_sweep_timer: dc.b	0
 sound_sweep_negated: dc.b	0
+		even
 sound_wave_time: dc.l	$40000000
 sound_wave_next: dc.l	0
 sound_wave_period: dc.l	4096
@@ -16342,7 +16350,7 @@ ffxx_jmp_table:	dc.l	do_joystick
 		dc.l	sio_control
 		dc.l	no_write				;$03.
 		dc.l	clear_divider
-		IFEQ	Z80_MODE
+		IFLE	Z80_MODE
 		dc.l	timer_write_count
 		dc.l	timer_write_modulo
 		ELSE
@@ -16883,6 +16891,9 @@ status_rom_reset_txt:
 status_gbs_loaded_txt:
 		dc.b	"> RAM snapshot loaded <",0
 		even
+status_bad_gbs_ram_txt:
+		dc.b	"> Invalid snapshot RAM data <",0
+		even
 status_running_txt:
 		dc.b	"> Executing ROM <",0
 		even
@@ -17062,6 +17073,7 @@ colour_load_status:
 		dc.b	0
 
 rom_type:	dc.b	0
+mbc5_cartridge:	dc.b	0
 
 irq_status_flags:
 		dc.b	0

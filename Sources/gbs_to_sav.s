@@ -6,10 +6,29 @@
 		incdir	"binworld:includes/"
 		include	"exec/memory.i"
 		include	"dos/dos.i"
-		include	"exec_lib.i"
-		include	"dos_lib.i"
-		include	"xpkmaster_lib.i"
+		include	"lvo/exec_lib.i"
+		include	"dos/dos_lib.i"
+		include	"lvo/xpkmaster_lib.i"
 		include	"xpk/xpk.i"
+
+execbase	equ	4
+Mode_Old	equ	MODE_OLDFILE
+Mode_New	equ	MODE_NEWFILE
+OpenLibrary	equ	_LVOOpenLibrary
+CloseLibrary	equ	_LVOCloseLibrary
+AllocVec	equ	_LVOAllocVec
+FreeVec		equ	_LVOFreeVec
+Lock		equ	_LVOLock
+UnLock		equ	_LVOUnLock
+Examine		equ	_LVOExamine
+Open		equ	_LVOOpen
+Close		equ	_LVOClose
+Read		equ	_LVORead
+Write		equ	_LVOWrite
+Output		equ	_LVOOutput
+XpkOpen		equ	_LVOXpkOpen
+XpkClose	equ	_LVOXpkClose
+XpkUnpack	equ	_LVOXpkUnpack
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		section	juures,code
@@ -135,7 +154,6 @@ load_data:	move.l	xpk_master_base,d0
 		bne.w	quit_xpk			;no. it's something else.
 
 		move.l	xf_ULen(a0),file_length		;uncompressed length.
-		add.l	#XPK_MARGIN,file_length		;xpk margin area.
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		cartridge loader memory handler
@@ -143,7 +161,7 @@ load_data:	move.l	xpk_master_base,d0
 
 		move.l	exec_base,a6
 		move.l	file_length,d0
-		addq.l	#4,d0				;#4 checker.
+		add.l	#XPK_MARGIN+4,d0
 		moveq.l	#MEMF_PUBLIC,d1			;the system flags.
 		jsr	AllocVec(a6)
 		move.l	d0,cartridge			;the pointer here.
@@ -169,7 +187,9 @@ load_data:	move.l	xpk_master_base,d0
 		lea	xpk_unp_tags,a0
 		move.l	file_hd,4(a0)
 		move.l	cartridge,12(a0)
-		move.l	file_length,20(a0)		;output area length!
+		move.l	file_length,d0
+		add.l	#XPK_MARGIN,d0
+		move.l	d0,20(a0)
 		jsr	XpkUnpack(a6)
 		tst.l	d0
 		bne.s	xpk_argh			;error here!
@@ -245,6 +265,7 @@ take_the_length:move.l	file_info_ptr,a0
 		move.l	cartridge,d2			;output address.
 		move.l	file_length,d3			;the length.
 		jsr	Read(a6)			;read.
+		move.l	d0,file_length
 
 		move.l	file_hd,d1
 		jsr	Close(a6)			;click.
@@ -254,15 +275,50 @@ take_the_length:move.l	file_info_ptr,a0
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 load_ok:	move.l	cartridge,a0
-		add.l	#56+$2000,a0
-		cmp.l	#4,(a0)				;four banks?
-		bne.s	one_bank_out			;nope, only one.
+		cmp.l	#56+$8000+4+1,file_length
+		blt.w	error_in_open
+		lea	56+$2000(a0),a1			;live $A000 RAM window.
+		move.l	a1,d6
+		move.l	#$2000,d7
+		move.l	a0,a2
+		add.l	#56+$8000,a2
+		move.l	(a2)+,d0			;bank count after guest RAM.
+		cmp.l	#1,d0
+		bls.s	save_banks
+		cmp.l	#4,d0
+		beq.s	banked_sram
+		cmp.l	#8,d0
+		beq.s	banked_sram
+		cmp.l	#16,d0
+		bne.w	error_in_open
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		now save the RAM banks
+;		merge the live window into the backing banks
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-four_banks_out:	move.l	dos_base,a6			;open the data file.
+banked_sram:	move.l	d0,d7
+		lsl.l	#8,d7
+		lsl.l	#5,d7
+		move.l	d7,d1
+		add.l	#56+$8000+4+1,d1
+		cmp.l	file_length,d1
+		bhi.w	error_in_open
+		move.l	a2,d6
+		subq.l	#1,d0
+		and.l	52(a0),d0			;active bank number.
+		lsl.l	#8,d0
+		lsl.l	#5,d0
+		add.l	d0,a2
+		; The active window may be newer than the copy in the backing banks.
+		move.w	#$2000/4-1,d0
+merge_sram:	move.l	(a1)+,(a2)+
+		dbra	d0,merge_sram
+
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+;		now save the RAM
+;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+save_banks:	move.l	dos_base,a6			;open the data file.
 		move.l	name_output,d1			;the name of the file.
 		move.l	#Mode_New,d2
 		jsr	Open(a6)			;narsk.
@@ -270,28 +326,8 @@ four_banks_out:	move.l	dos_base,a6			;open the data file.
 		beq.w	error_in_save			;file error!
 
 		move.l	d0,d1				;file_hd.
-		move.l	cartridge,d2			;input address.
-		add.l	#56+$10000-$8000+4,d2		;skip the control bytes.
-		move.l	#$2000*4,d3			;the length.
-		jsr	Write(a6)			;write.
-
-		bra.s	save_exit
-
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		now save the RAM bank
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-
-one_bank_out:	move.l	dos_base,a6			;open the data file.
-		move.l	name_output,d1			;the name of the file.
-		move.l	#Mode_New,d2
-		jsr	Open(a6)			;narsk.
-		move.l	d0,file_hd
-		beq.w	error_in_save			;file error!
-
-		move.l	d0,d1				;file_hd.
-		move.l	cartridge,d2			;input address.
-		add.l	#56+$A000-$8000,d2		;skip the control bytes.
-		move.l	#$2000,d3			;the length.
+		move.l	d6,d2				;input address.
+		move.l	d7,d3				;the length.
 		jsr	Write(a6)			;write.
 
 save_exit:	move.l	file_hd,d1

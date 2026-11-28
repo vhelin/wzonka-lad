@@ -6368,7 +6368,7 @@ z80_optc_CBEF:	subq.l	#2,a5					;less cycles.
 z80_optcode_F0:	move.w	#$ff00,d7
 		move.b	(a0)+,d7
 		subq.l	#3,a5
-		CLOCK_READ_A d7
+		LDH_READ_A
 
 		fetch_next_i
 		cnop	0,128
@@ -6419,7 +6419,7 @@ z80_optc_CBF1:	subq.l	#2,a5					;less cycles.
 z80_optcode_F2:	move.w	#$ff00,d7
 		subq.l	#2,a5
 		move.b	d1,d7
-		CLOCK_READ_A d7
+		LDH_READ_A
 
 		fetch_next_i
 		cnop	0,128

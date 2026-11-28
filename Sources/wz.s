@@ -106,6 +106,17 @@ function_x		=384
 function_y		=194
 function_x_bm		=384
 function_y_bm		=193
+gfx_preview_x		=34
+gfx_preview_y		=139
+gfx_preview_width	=304
+gfx_preview_height	=39
+gfx_preview_pixels	=gfx_preview_width*gfx_preview_height
+gfx_preview_plane	=gfx_preview_pixels/8
+gfx_colours_x		=20
+gfx_colours_width	=334
+gfx_colour_button_width =61
+gfx_colour_control_gap	=9
+gfx_colour_load_label_gap =5
 gb_screen_x		=192
 gb_screen_y		=176
 register_x		=320
@@ -626,48 +637,7 @@ back_pattern_crt_x_2:
 ;		precalc the gfx window game still colours
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-		move.l	graphics_base,a6
-		move.l	gfx_game_still_rast_port,a1
-		jsr	InitRastPort(a6)
-
-		move.l	gfx_game_still_rast_port,a0
-		move.l	gfx_game_still_tmp_rast_port,a1
-		bsr.w	copy_rast_port
-
-		move.l	gfx_game_still_map_attr,a0
-		lea	gfx_game_still_map,a1
-		move.l	#304,d1
-		moveq.l	#39,d2
-		moveq.l	#3,d0
-		bsr.w	init_bit_map
-
-		move.l	gfx_game_still_map_attr,a4
-		lea	gfx_game_still_tmp_map_attr,a5
-		bsr.w	alloc_bit_map
-		tst.l	d0
-		beq.w	quit
-
-		move.l	d0,a0
-		move.w	#304/8,bm_BytesPerRow(a0)
-		move.w	#1,bm_Rows(a0)
-
-		move.l	gfx_game_still_rast_port,a0
-		move.l	gfx_game_still_map_attr,rp_BitMap(a0)
-		move.l	gfx_game_still_tmp_rast_port,a0
-		move.l	gfx_game_still_tmp_map_attr,rp_BitMap(a0)
-		clr.l	rp_Layer(a0)
-
-		moveq.l	#0,d0
-		moveq.l	#0,d1
-		move.l	#303,d2
-		moveq.l	#38,d3
-		move.l	gfx_game_still_rast_port,a0
-		move.l	gfx_game_still_tmp_rast_port,a1
-		move.l	gfx_game_still_array,a2
-		jsr	ReadPixelArray8(a6)
-
-		lea	gfx_game_still_tmp_map_attr,a1
-		bsr.w	free_bit_maps
+		bsr.w	decode_test_image
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		precalc
@@ -743,6 +713,7 @@ xpk_count_xit:
 ;		load preferences
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+		bsr.w	copy_default_gfx_colours
 		bsr.w	prefs_load_default
 		bsr.w	load_game_genie_list
 
@@ -773,19 +744,6 @@ obtain_pens:	move.l	a5,a0
 		jsr	ObtainBestPenA(a6)
 		move.b	d0,(a3)+
 		dbra	d7,obtain_pens
-
-		move.l	gfx_game_still_array,a0
-		move.l	gfx_game_still_tmp_array,a1
-		lea	pen_list,a2
-		move.w	#(304*39)-1,d0
-		moveq.l	#0,d1
-convert_pens:	move.b	(a0)+,d1
-		move.b	(a2,d1.l),(a1)+
-		dbra	d0,convert_pens
-
-		lea	pen_list,a4
-		move.l	(a4),pen_storage_list		;save the pens.
-		move.l	4(a4),pen_storage_list+4		
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		allocate gfx driver memory
@@ -847,6 +805,7 @@ convert_pens:	move.b	(a0)+,d1
 		tst.l	d0
 		bne.w	quit
 
+		bsr.w	layout_gfx_colour_controls
 		lea	gfx_gadgets,a4
 		move.l	context_g_gfx,a5
 		bsr.w	gadget_crt			;create gadgets.
@@ -1069,31 +1028,6 @@ no_sfx_off:	move.l	key_file,a0
 		ENDIF
 
 no_key_sfx_off:	
-
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		init new bit maps for the output routines
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-
-		move.l	menu_ptr,a0
-		move.l	wd_RPort(a0),a0
-		move.l	gfx_game_still_tmp_rast_port,a1
-		bsr.w	copy_rast_port
-
-		move.l	menu_ptr,a4
-		move.l	wd_RPort(a4),a4
-		move.l	rp_BitMap(a4),a4
-		lea	gfx_game_still_tmp_map_attr,a5
-		bsr.w	alloc_bit_map
-		tst.l	d0
-		beq.w	quit
-
-		move.l	d0,a0
-		move.w	#304/8,bm_BytesPerRow(a0)
-		move.w	#1,bm_Rows(a0)
-
-		move.l	gfx_game_still_tmp_rast_port,a0
-		move.l	gfx_game_still_tmp_map_attr,rp_BitMap(a0)
-		clr.l	rp_Layer(a0)
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		check out the command line input from a shell
@@ -1611,7 +1545,6 @@ menu_jump_tbl:	dc.l	menu_rom_load
 ;		a5	= place for pointer.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-alloc_bit_map:	move.l	#304,d0
 alloc_bit_map_other:
 		moveq.l	#1,d1
 		moveq.l	#0,d2
@@ -2928,7 +2861,12 @@ create_col:	lea	(a1,d1.l*4),a2			;a2 = colour values.
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 get_screen_cyber_status:
-		clr.l	output_cyber_status
+		bsr.s	get_cyber_mode_status
+		move.l	d0,output_cyber_status
+		rts
+
+get_cyber_mode_status:
+		moveq.l	#0,d0
 		tst.l	cyber_base
 		beq.s	screen_cyber_status_done
 
@@ -2938,7 +2876,6 @@ get_screen_cyber_status:
 
 		move.l	cyber_base,a6
 		jsr	IsCyberModeID(a6)
-		move.l	d0,output_cyber_status
 screen_cyber_status_done:
 		rts
 
@@ -4298,11 +4235,12 @@ menu_edit_gfx_on:
 		move.l	#gfx_jmp_table,function_jmp
 		move.l	#"GFX!",function_status
 
-		bsr.w	gfx_values_update		;has .prefs loading altered
-							;any gadget values?
-		bsr.w	obtain_status_direct		;turn it on/off?
-
+		tst.b	gfx_values_need_update		;applying prefs also draws the preview.
+		bne.s	menu_edit_gfx_update
 		bsr.w	write_test_image
+menu_edit_gfx_update:
+		bsr.w	gfx_values_update
+		bsr.w	obtain_status_direct		;turn it on/off?
 
 		move.l	intuition_base,a6
 		move.l	function_ptr,a0
@@ -4941,8 +4879,26 @@ get_gfx_frame_skip:
 		bra.w	get_message
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		window button jump tables
+;		centre the Colours controls before creating the gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+
+layout_gfx_colour_controls:
+		move.l	intuition_base,a6
+		lea	gfx_load_text,a0
+		jsr	IntuiTextLength(a6)
+		; Include the right-hand label in the width of the control row.
+		move.w	#gfx_colours_width-2*gfx_colour_button_width-2*gfx_colour_control_gap-CHECKBOX_WIDTH-gfx_colour_load_label_gap,d1
+		sub.w	d0,d1
+		lsr.w	#1,d1
+		add.w	#gfx_colours_x,d1
+		move.w	d1,gfx_reset_gadget
+		add.w	#gfx_colour_button_width+gfx_colour_control_gap,d1
+		move.w	d1,gfx_obtain_gadget
+		add.w	#gfx_colour_button_width+gfx_colour_control_gap,d1
+		move.w	d1,gfx_load_gadget
+		rts
+
+;		window button jump tables
 
 gfx_jmp_table:	dc.l	get_gfx_driver
 		dc.l	get_gfx_scaling
@@ -4953,6 +4909,7 @@ gfx_jmp_table:	dc.l	get_gfx_driver
 		dc.l	obtain_from_colour_editor
 		dc.l	get_gfx_frame_skip
 		dc.l	get_gfx_colour_status
+		dc.l	reset_gfx_colours
 
 prefs_jmp_table:dc.l	get_prefs_str_1
 		dc.l	get_prefs_str_2
@@ -7364,12 +7321,21 @@ copy_colours_data:
 		jsr	ReplyMsg(a6)			;send the colours back.
 		rts
 
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		obtain new colours
-;		INPUT:
-;		a0	= message.
-;		a1	= data area (256.B).
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
+reset_gfx_colours:
+		bsr.s	copy_default_gfx_colours
+		bsr.w	obtain_colours_apply
+		bra.w	get_message
+
+copy_default_gfx_colours:
+		lea	default_gameboy_colours,a0
+		lea	gameboy_colours,a1
+		moveq.l	#8-1,d0
+copy_default_gfx_colour:
+		move.l	(a0)+,(a1)+
+		dbra	d0,copy_default_gfx_colour
+		rts
+
+;		obtain new colours from Palette Editor (message in a0)
 
 obtain_new_colours:
 		lea	gameboy_colours,a2
@@ -7387,9 +7353,6 @@ obtain_colours_data:
 
 obtain_colours_apply:
 		lea	pen_list,a4
-		move.l	(a4),pen_storage_list		;save the pens.
-		move.l	4(a4),pen_storage_list+4		
-
 		lea	gameboy_colours,a3
 		move.l	pub_screen_lock,a5
 		lea	sc_ViewPort(a5),a5
@@ -7419,28 +7382,43 @@ obtain_change_pens:
 		addq.l	#4,a3
 		dbra	d7,obtain_change_pens
 
-		move.l	pen_list,d0
-		cmp.l	pen_storage_list,d0
-		bne.s	convert_all_pens		;pen(s) have changed.
-		move.l	pen_list+4,d0
-		cmp.l	pen_storage_list+4,d0
-		bne.s	convert_all_pens
-		rts					;no conversion.
+		bra.w	write_test_image
 
-convert_all_pens:
+decode_test_image:
+		lea	gfx_game_still_map,a0
+		move.l	gfx_game_still_array,a1
+		lea	gfx_preview_plane(a0),a2
+		lea	gfx_preview_plane(a2),a3
+		move.w	#gfx_preview_plane-1,d0
+decode_test_image_byte:
+		move.b	(a0)+,d2
+		move.b	(a2)+,d3
+		move.b	(a3)+,d4
+		moveq.l	#7,d5
+decode_test_image_pixel:
+		moveq.l	#0,d1			;shift the three MSBs into one index.
+		add.b	d4,d4
+		addx.b	d1,d1
+		add.b	d3,d3
+		addx.b	d1,d1
+		add.b	d2,d2
+		addx.b	d1,d1
+		move.b	d1,(a1)+
+		dbra	d5,decode_test_image_pixel
+		dbra	d0,decode_test_image_byte
+		rts
+
+convert_test_image_pens:
 		move.l	gfx_game_still_array,a0
 		move.l	gfx_game_still_tmp_array,a1
 		lea	pen_list,a2
-		move.w	#(304*39)-1,d0
+		move.w	#gfx_preview_pixels-1,d0
 		moveq.l	#0,d1
 convert_pen_values:
 		move.b	(a0)+,d1
 		move.b	(a2,d1.l),(a1)+
 		dbra	d0,convert_pen_values
 
-		bsr.b	write_test_image
-
-no_obtained_output:
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -7449,40 +7427,127 @@ no_obtained_output:
 
 write_test_image:
 		cmp.l	#"GFX!",function_status
-		bne.s	write_test_image_exit
+		bne.w	write_test_image_exit
 
-		tst.l	cyber_base
+		move.l	function_ptr,a0
+		move.l	wd_WScreen(a0),a0
+		bsr.w	get_cyber_mode_status
+		tst.l	d0
 		bne.s	write_test_image_with_cyber
 
+		tst.l	gfx_game_still_tmp_map_attr
+		bne.s	write_test_image_native
+
+		move.l	function_ptr,a4
+		move.l	wd_RPort(a4),a4
+		move.l	rp_BitMap(a4),a4
+		lea	gfx_game_still_tmp_map_attr,a5
+		move.l	#gfx_preview_width,d0
+		bsr.w	alloc_bit_map_other
+		tst.l	d0
+		beq.w	write_test_image_no_mem
+
+		move.l	d0,a0
+		move.w	#gfx_preview_width/8,bm_BytesPerRow(a0)
+
+write_test_image_native:
+		move.l	function_ptr,a0
+		move.l	wd_RPort(a0),a0
+		move.l	gfx_game_still_tmp_rast_port,a1
+		bsr.w	copy_rast_port
+		move.l	gfx_game_still_tmp_rast_port,a1
+		move.l	gfx_game_still_tmp_map_attr,rp_BitMap(a1)
+		clr.l	rp_Layer(a1)
+
+		bsr.w	convert_test_image_pens
 		move.l	graphics_base,a6
-		move.l	#34,d0
-		move.l	#139,d1
-		move.l	#34+303,d2
-		move.l	#139+38,d3
+		moveq.l	#gfx_preview_x,d0
+		move.l	#gfx_preview_y,d1
+		move.l	#gfx_preview_x+gfx_preview_width-1,d2
+		move.l	#gfx_preview_y+gfx_preview_height-1,d3
 		move.l	function_ptr,a0
 		move.l	wd_RPort(a0),a0
 		move.l	gfx_game_still_tmp_rast_port,a1
 		move.l	gfx_game_still_tmp_array,a2
 		jsr	WritePixelArray8(a6)
+		tst.l	d0
+		bmi.w	write_test_image_failed
 
 write_test_image_exit:
 		rts
 
 write_test_image_with_cyber:
 		move.l	cyber_base,a6
+		move.l	function_ptr,a0
+		move.l	wd_RPort(a0),a0
+		move.l	rp_BitMap(a0),a0
+		move.l	#CYBRMATTR_DEPTH,d0
+		jsr	_LVOGetCyberMapAttr(a6)
+		tst.l	d0
+		ble.w	write_test_image_failed
+		cmp.l	#8,d0
+		bhi.s	write_test_image_rgb
+
+		bsr.w	convert_test_image_pens
 		move.l	gfx_game_still_tmp_array,a0
 		moveq.l	#0,d0
 		moveq.l	#0,d1
-		move.l	#304,d2
-		moveq.l	#34,d3
-		move.l	#139,d4
-		move.l	#304,d5
-		moveq.l	#39,d6
+		move.l	#gfx_preview_width,d2
+		moveq.l	#gfx_preview_x,d3
+		move.l	#gfx_preview_y,d4
+		move.l	#gfx_preview_width,d5
+		moveq.l	#gfx_preview_height,d6
 		move.l	#RECTFMT_LUT8,d7
 		move.l	function_ptr,a1
 		move.l	wd_RPort(a1),a1
 		jsr	WritePixelArray(a6)
+		tst.l	d0
+		bmi.s	write_test_image_failed
 		rts
+
+write_test_image_rgb:
+		move.l	gfx_game_still_array,a3
+		move.l	function_ptr,a4
+		move.l	wd_RPort(a4),a4
+		lea	gameboy_colours,a5
+		move.l	#gfx_preview_y,d4
+write_test_image_rgb_row:
+		; Expand one RGB row in the same scratch buffer used for indexed output.
+		move.l	gfx_game_still_tmp_array,a0
+		move.w	#gfx_preview_width-1,d0
+		moveq.l	#0,d1
+write_test_image_rgb_pixel:
+		move.b	(a3)+,d1
+		lea	1(a5,d1.l*4),a1
+		move.b	(a1)+,(a0)+
+		move.b	(a1)+,(a0)+
+		move.b	(a1),(a0)+
+		dbra	d0,write_test_image_rgb_pixel
+
+		move.l	gfx_game_still_tmp_array,a0
+		move.l	a4,a1
+		moveq.l	#0,d0
+		moveq.l	#0,d1
+		move.l	#gfx_preview_width*3,d2
+		moveq.l	#gfx_preview_x,d3
+		move.l	#gfx_preview_width,d5
+		moveq.l	#1,d6
+		moveq.l	#RECTFMT_RGB,d7
+		jsr	WritePixelArray(a6)
+		tst.l	d0
+		bmi.s	write_test_image_failed
+		addq.l	#1,d4
+		cmp.l	#gfx_preview_y+gfx_preview_height,d4
+		bne.s	write_test_image_rgb_row
+		rts
+
+write_test_image_failed:
+		lea	status_preview_draw_failed_txt,a5
+		bra.w	print_status_middle
+
+write_test_image_no_mem:
+		lea	status_not_enough_memory_txt,a5
+		bra.w	print_status_middle
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		back pattern the function window
@@ -9329,9 +9394,6 @@ no_vbr_blank:	move.b	$0f(a6),d7
 dehalting_z80_0:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
-		IFNE	Z80_MODE
-		move.b	#5,z80_irq_cycles
-		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_0
@@ -9463,9 +9525,6 @@ no_lcd_irq_emulation_1:
 dehalting_z80_1:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
-		IFNE	Z80_MODE
-		move.b	#5,z80_irq_cycles
-		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_1
@@ -9525,9 +9584,6 @@ no_timer_update_2:
 dehalting_z80_2:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
-		IFNE	Z80_MODE
-		move.b	#5,z80_irq_cycles
-		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_2
@@ -9625,9 +9681,6 @@ no_lcd_irq_emulation_3:
 dehalting_z80_3:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
-		IFNE	Z80_MODE
-		move.b	#5,z80_irq_cycles
-		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_3
@@ -9687,9 +9740,6 @@ no_timer_update_4:
 dehalting_z80_4:move.l	a0,d6				;stack the pc.
 		sub.l	z80_pc_base,d6
 		clr.b	z80_halt
-		IFNE	Z80_MODE
-		move.b	#5,z80_irq_cycles
-		ENDIF
 
 		btst	#0,d7
 		bne.w	prior_i_4
@@ -10218,7 +10268,6 @@ lcd_start_irq_check:
 
 ; The timed-read caller has already debited the bus cycle. Project into
 ; the next slice only if that cycle starts past the current boundary.
-		IFEQ	Z80_MODE
 lcd_stat_read:
 		tst.b	sound_div_active
 		beq.s	lcd_stat_read_raw
@@ -10247,7 +10296,6 @@ lcd_stat_read_raw:
 		moveq.l	#0,d6
 		move.b	$ff41(a2),d6
 		rts
-		ENDIF
 
 ; At cartridge entry LY already reads 0, but the LCD is still in VBlank.
 ; Run the last 52 dots of line 153 before the first full scanline.
@@ -10554,6 +10602,12 @@ timer_slice_limit:
 		beq.s	timer_limit_pending
 		tst.b	timer_shift
 		beq.s	timer_limit_done
+; Below $F8, even the fastest tap needs at least 34 M-cycles to reload.
+		cmp.l	#32,d6
+		bhi.s	timer_limit_exact
+		cmp.b	#$f8,$ff05(a2)
+		blo.s	timer_limit_done
+timer_limit_exact:
 		movem.l	d0-d1,-(SP)
 		moveq.l	#0,d0
 		move.b	$ff05(a2),d0
@@ -11289,13 +11343,7 @@ no_chnlIV_no_no:bra.w	sfx_back
 ; WARP skips periodic STAT/timer updates but still services pending requests.
 prior_i_0:	bclr.b	#0,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$40(a3),a0
 		move.l	a3,z80_pc_base
@@ -11305,13 +11353,7 @@ prior_i_0:	bclr.b	#0,$0f(a6)
 
 prior_ii_0:	bclr.b	#1,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$48(a3),a0
 		move.l	a3,z80_pc_base
@@ -11321,13 +11363,7 @@ prior_ii_0:	bclr.b	#1,$0f(a6)
 
 prior_iii_0:	bclr.b	#2,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$50(a3),a0
 		move.l	a3,z80_pc_base
@@ -11337,13 +11373,7 @@ prior_iii_0:	bclr.b	#2,$0f(a6)
 
 prior_iv_0:	bclr.b	#3,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$58(a3),a0
 		move.l	a3,z80_pc_base
@@ -11353,13 +11383,7 @@ prior_iv_0:	bclr.b	#3,$0f(a6)
 
 prior_v_0:	bclr.b	#4,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$60(a3),a0
 		move.l	a3,z80_pc_base
@@ -11369,13 +11393,7 @@ prior_v_0:	bclr.b	#4,$0f(a6)
 
 prior_i_1:	bclr.b	#0,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$40(a3),a0
 		move.l	a3,z80_pc_base
@@ -11385,13 +11403,7 @@ prior_i_1:	bclr.b	#0,$0f(a6)
 
 prior_ii_1:	bclr.b	#1,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$48(a3),a0
 		move.l	a3,z80_pc_base
@@ -11401,13 +11413,7 @@ prior_ii_1:	bclr.b	#1,$0f(a6)
 
 prior_iii_1:	bclr.b	#2,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$50(a3),a0
 		move.l	a3,z80_pc_base
@@ -11417,13 +11423,7 @@ prior_iii_1:	bclr.b	#2,$0f(a6)
 
 prior_iv_1:	bclr.b	#3,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$58(a3),a0
 		move.l	a3,z80_pc_base
@@ -11433,13 +11433,7 @@ prior_iv_1:	bclr.b	#3,$0f(a6)
 
 prior_v_1:	bclr.b	#4,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$60(a3),a0
 		move.l	a3,z80_pc_base
@@ -11449,13 +11443,7 @@ prior_v_1:	bclr.b	#4,$0f(a6)
 
 prior_i_2:	bclr.b	#0,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$40(a3),a0
 		move.l	a3,z80_pc_base
@@ -11465,13 +11453,7 @@ prior_i_2:	bclr.b	#0,$0f(a6)
 
 prior_ii_2:	bclr.b	#1,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$48(a3),a0
 		move.l	a3,z80_pc_base
@@ -11481,13 +11463,7 @@ prior_ii_2:	bclr.b	#1,$0f(a6)
 
 prior_iii_2:	bclr.b	#2,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$50(a3),a0
 		move.l	a3,z80_pc_base
@@ -11497,13 +11473,7 @@ prior_iii_2:	bclr.b	#2,$0f(a6)
 
 prior_iv_2:	bclr.b	#3,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$58(a3),a0
 		move.l	a3,z80_pc_base
@@ -11513,13 +11483,7 @@ prior_iv_2:	bclr.b	#3,$0f(a6)
 
 prior_v_2:	bclr.b	#4,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$60(a3),a0
 		move.l	a3,z80_pc_base
@@ -11529,13 +11493,7 @@ prior_v_2:	bclr.b	#4,$0f(a6)
 
 prior_i_3:	bclr.b	#0,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$40(a3),a0
 		move.l	a3,z80_pc_base
@@ -11545,13 +11503,7 @@ prior_i_3:	bclr.b	#0,$0f(a6)
 
 prior_ii_3:	bclr.b	#1,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$48(a3),a0
 		move.l	a3,z80_pc_base
@@ -11561,13 +11513,7 @@ prior_ii_3:	bclr.b	#1,$0f(a6)
 
 prior_iii_3:	bclr.b	#2,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$50(a3),a0
 		move.l	a3,z80_pc_base
@@ -11577,13 +11523,7 @@ prior_iii_3:	bclr.b	#2,$0f(a6)
 
 prior_iv_3:	bclr.b	#3,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$58(a3),a0
 		move.l	a3,z80_pc_base
@@ -11593,13 +11533,7 @@ prior_iv_3:	bclr.b	#3,$0f(a6)
 
 prior_v_3:	bclr.b	#4,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$60(a3),a0
 		move.l	a3,z80_pc_base
@@ -11609,13 +11543,7 @@ prior_v_3:	bclr.b	#4,$0f(a6)
 
 prior_i_4:	bclr.b	#0,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$40(a3),a0
 		move.l	a3,z80_pc_base
@@ -11625,13 +11553,7 @@ prior_i_4:	bclr.b	#0,$0f(a6)
 
 prior_ii_4:	bclr.b	#1,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$48(a3),a0
 		move.l	a3,z80_pc_base
@@ -11641,13 +11563,7 @@ prior_ii_4:	bclr.b	#1,$0f(a6)
 
 prior_iii_4:	bclr.b	#2,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$50(a3),a0
 		move.l	a3,z80_pc_base
@@ -11657,13 +11573,7 @@ prior_iii_4:	bclr.b	#2,$0f(a6)
 
 prior_iv_4:	bclr.b	#3,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$58(a3),a0
 		move.l	a3,z80_pc_base
@@ -11673,13 +11583,7 @@ prior_iv_4:	bclr.b	#3,$0f(a6)
 
 prior_v_4:	bclr.b	#4,$0f(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_irq_stack
-		ELSE
-		ror.w	#8,d6
-		subq.w	#2,d5
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$60(a3),a0
 		move.l	a3,z80_pc_base
@@ -14422,6 +14326,7 @@ gfx_g_frame_skip:
 		dc.l	0
 gfx_g_mode:	dc.l	0
 gfx_g_obtain:	dc.l	0
+gfx_g_reset:	dc.l	0
 gfx_g_scaling:	dc.l	0
 gfx_g_scanline_x:
 		dc.l	0
@@ -14476,6 +14381,8 @@ gfx_mode:	dc.b	"Mode",0
 gfx_select:	dc.b	"Select",0
 		even
 gfx_obtain:	dc.b	"Obtain",0
+		even
+gfx_reset:	dc.b	"Reset",0
 		even
 gfx_load:	dc.b	"Load",0
 		even
@@ -14558,12 +14465,22 @@ gfx_gadgets:	dc.w	driver_x+53,driver_y-5
 		dc.w	60,13
 		dc.l	gfx_g_select
 
-		dc.w	120,120
+gfx_reset_gadget:
+		dc.w	0,120
+		dc.l	PLACETEXT_IN
+		dc.l	gfx_reset
+		dc.w	9
+		dc.w	0				;button_kind!
+		dc.w	gfx_colour_button_width,14
+		dc.l	gfx_g_reset
+
+gfx_obtain_gadget:
+		dc.w	0,120
 		dc.l	PLACETEXT_IN
 		dc.l	gfx_obtain
 		dc.w	6
 		dc.w	0				;button_kind!
-		dc.w	61,14
+		dc.w	gfx_colour_button_width,14
 		dc.l	gfx_g_obtain
 
 		dc.w	298,89
@@ -14577,7 +14494,8 @@ gfx_gadgets:	dc.w	driver_x+53,driver_y-5
 		dc.l	frame_update_number
 		dc.l	gfx_g_frame_skip
 
-		dc.w	190,122
+gfx_load_gadget:
+		dc.w	0,122
 		dc.l	PLACETEXT_RIGHT
 		dc.l	gfx_load
 		dc.w	8
@@ -14587,6 +14505,10 @@ gfx_gadgets:	dc.w	driver_x+53,driver_y-5
 		dc.l	gfx_g_colour_load
 
 		dc.l	0
+
+gfx_load_text:	dc.b	1,0,0,0
+		dc.w	0,0
+		dc.l	font_attr,gfx_load,0
 
 gfx_txt_1:	dc.b	2
 		dc.b	0
@@ -15098,7 +15020,7 @@ version_data:	dc.b	"$VER: Wzonka-Lad 1.13.00"
 		ELSE
 		dc.b	"e"
 		ENDIF
-		dc.b	" (25.11.2026)",0
+		dc.b	" (28.11.2026)",0
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -15137,7 +15059,7 @@ prefs_bevel_list:
 
 gfx_bevel_list:	dc.w	20,10,334,65
 		dc.w	20,85,334,19
-		dc.w	20,114,334,69
+		dc.w	gfx_colours_x,114,gfx_colours_width,69
 		dc.w	0
 
 misc_bevel_list:dc.w	75,misc_g_y-6,255,72
@@ -15196,14 +15118,10 @@ colour_message_name:
 		dc.l	0
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		read pixel array
+;		preview pixels and native upload scratch
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 gfx_game_still_array:
-		dc.l	0
-gfx_game_still_map_attr:
-		dc.l	0
-gfx_game_still_rast_port:
 		dc.l	0
 
 gfx_game_still_tmp_array:
@@ -15222,8 +15140,10 @@ obtain_pens_tag_list:
 		dc.l	OBP_FailIfBad,FALSE
 		dc.l	TAG_END,0
 
-gameboy_colours:incbin	"data/gameboy_colours.pal"
+default_gameboy_colours:
+		incbin	"data/gameboy_colours.pal"
 		even
+gameboy_colours:ds.l	8
 
 gameboy_colours_conversion_table:
 		ds.b	16
@@ -15233,8 +15153,6 @@ pen_conversion_table:
 window_scale_table:
 		dc.l	0
 pen_list:	ds.b	8
-pen_storage_list:
-		ds.b	8
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		the 20 recent menu items for menu window
@@ -16768,11 +16686,9 @@ list_default_structure:
 		dc.l	colour_message_name,256,MEMF_PUBLIC!MEMF_CLEAR
 		dc.l	menu_favo_nf,32*20,MEMF_PUBLIC!MEMF_CLEAR
 
-		dc.l	gfx_game_still_array,((((304+15)/16)*16)*(39+1)),MEMF_PUBLIC
-		dc.l	gfx_game_still_tmp_array,((((304+15)/16)*16)*(39+1)),MEMF_PUBLIC
-		dc.l	gfx_game_still_rast_port,rp_SIZEOF,MEMF_PUBLIC
+		dc.l	gfx_game_still_array,gfx_preview_pixels,MEMF_PUBLIC
+		dc.l	gfx_game_still_tmp_array,gfx_preview_pixels,MEMF_PUBLIC
 		dc.l	gfx_game_still_tmp_rast_port,rp_SIZEOF,MEMF_PUBLIC
-		dc.l	gfx_game_still_map_attr,bm_SIZEOF,MEMF_PUBLIC!MEMF_CLEAR
 
 		dc.l	keyboard_io,IOSTD_SIZE,MEMF_PUBLIC!MEMF_CLEAR
 		dc.l	keyboard_matrix,16,MEMF_PUBLIC!MEMF_CLEAR
@@ -16911,6 +16827,9 @@ status_xpk_error_txt:
 		even
 status_not_enough_memory_txt:
 		dc.b	"> Not enough memory <",0
+		even
+status_preview_draw_failed_txt:
+		dc.b	"> Could not draw colour preview <",0
 		even
 status_too_big_a_file_txt:
 		dc.b	"> Too big a file <",0
@@ -17225,7 +17144,7 @@ z80_halt_bug:	dc.b	0
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		section	displayable_images,data_c
+;		embedded planar preview (decoded by the CPU)
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 gfx_game_still_map:

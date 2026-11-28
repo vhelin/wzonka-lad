@@ -1,6 +1,6 @@
 @database "Wzonka-Lad Guide"
 @master "Wzonka-Lad Guide"
-@$VER: Wzonka-Lad Guide 1.13.00 (25.11.2026)
+@$VER: Wzonka-Lad Guide 1.13.00 (28.11.2026)
 @author "Ville Helin"
 @(c) "Ville Helin 1996-1999"
 
@@ -510,6 +510,12 @@
 
   @{b}Colours@{ub}
 
+  The sample image below the controls shows the current background and
+  sprite colours. On indexed Workbench screens it uses the closest
+  available pens, so some shades may look alike.
+
+  - Reset      -->  Restore the emulator's built-in colours and update the
+                    sample. This does not change Load or save preferences.
   - Obtain     -->  Fetch the colour values from the @{"Palette Editor" link "pe_main"}.
   - Load       ---> When unchecked this button disables colour data loading
                     from ROM's own preference file. If you have a very
@@ -727,6 +733,8 @@
   Sebastian Schlesinger, D. Dom�nguez, Jussi Lindgren, Mr. A, Mr. B, Tim Favro,
   Noca$h, Rodnay Zaks, Joona Palaste and all those unlukcy people I've
   forgotten. I have a bad memory. ;)
+  
+  Special thanks to z00p for lots of issue reports + fixes!
 
   "Nocash GMB Diag" was used in the making of this product. Thanks again!
 
@@ -798,7 +806,7 @@
 
 @endnode
 
-@node "pe_main" "Wzonka-Lad Palette Editor 1.10"
+@node "pe_main" "Wzonka-Lad Palette Editor 1.11"
 @toc "main"
 
           @{b}In General@{ub}
@@ -835,6 +843,8 @@
 
             @{b}Background and Sprite colours@{ub}
 
+              - Reset       -->   Restore the four built-in colours in this
+                                  box without changing the other box.
               - Interpolate -->   Compute the two colours between the first
                                   and the last one to form a smooth slide
                                   of shades.
@@ -867,6 +877,14 @@
 
 @node "pe_history" "History"
 @toc "pe_main"
+
+  1.11 (28.11.2026)
+  * The Palette Editor can reset background and sprite colours independently
+    to their built-in defaults.
+  * The Palette Editor now replies to GadTools events correctly and ignores
+    mouse moves that did not come from a colour slider.
+  * Copying a colour onto an identical RGB value no longer reallocates a
+    Workbench pen or redraws the Palette Editor previews.
 
   1.10 (25.05.99)
   "Colours"-label is now known as "Wzonka-Lad" for better logic.
@@ -1003,7 +1021,7 @@
 @node "history" "History"
 @toc "main"
 
-  v1.13.00 (25-Nov-2026):
+  v1.13.00 (28-Nov-2026):
   
     * 
 

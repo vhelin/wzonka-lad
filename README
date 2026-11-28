@@ -22,8 +22,25 @@ I take no responsibility for anything.
 
 2. CHANGELOG (RECENT)
 
-v1.13.00 (27-Nov-2026):
+v1.13.00 (28-Nov-2026):
 
+* The Palette Editor can reset background and sprite colours independently
+  to their built-in defaults.
+* The Palette Editor now replies to GadTools events correctly and ignores
+  mouse moves that did not come from a colour slider.
+* Copying a colour onto an identical RGB value no longer reallocates a
+  Workbench pen or redraws the Palette Editor previews.
+* Visual settings can restore the emulator's built-in background and
+  sprite colours with the Reset button in the Colours box.
+* The Visual settings colour preview now decodes its artwork without Chip
+  RAM and uses the appropriate drawing path for native or RTG Workbench
+  screens. True-colour RTG previews show the palette's RGB values directly.
+* FULL and FAST skip the timer IRQ deadline calculation when TIMA
+  cannot reload in the current CPU slice, preserving exact timing.
+* FAST and WARP now mirror interrupt stack writes into Echo RAM and
+  handle pushes that cross a memory boundary. LDH reads of STAT sample
+  the LCD mode at the read cycle. WARP also requests STAT on a new
+  LY=LYC match when the LCD is turned on, without periodic STAT updates.
 * OAM DMA copies all 160 bytes unchanged, including the low four bits of
   each sprite attribute byte. $FF46 remembers the last byte written.
 * Pending IRQs raised by guest I/O writes are checked before fetching

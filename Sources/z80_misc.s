@@ -391,6 +391,19 @@ clock_read_a_raw\@:
 		move.b	(a2,\1.l),d3
 		ENDM
 
+LDH_READ_A:	MACRO
+		IFEQ	GAMEBOY_USERS
+		cmp.w	#$ff41,d7
+		bne.s	ldh_read_clock\@
+		bsr.l	lcd_stat_read
+		move.b	d6,d3
+		bra.s	ldh_read_done\@
+ldh_read_clock\@:
+		ENDIF
+		CLOCK_READ_A d7
+ldh_read_done\@:
+		ENDM
+
 z80_fetch_opcode:
 		IFEQ	Z80_MODE
 		move.l	a0,d6
@@ -556,13 +569,11 @@ lcd_mode_write:	lea	$ff40(a2),a6
 		bra.s	lcd_mode_started
 lcd_mode_matching:
 		bset.b	#2,1(a6)
-		IFLE	Z80_MODE
 		bne.s	lcd_mode_started		;the retained match was already set.
 		btst.b	#6,1(a6)
 		beq.s	lcd_mode_started
 		bset.b	#1,$ff0f(a2)
 		bset.b	#2,irq_status_flags
-		ENDIF
 lcd_mode_started:
 		IFEQ	GAMEBOY_USERS
 		move.b	d6,(a6)
@@ -1320,13 +1331,7 @@ reti_choose_irq:
 
 irq_v:		bclr.b	#4,(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_d6_stackx
-		ELSE
-		subq.w	#2,d5
-		ror.w	#8,d6
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$60(a3),a0
 		move.l	a3,z80_pc_base				;rom base.
@@ -1341,13 +1346,7 @@ reti_still_halted:
 		cnop	0,4
 irq_i:		bclr.b	#0,(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_d6_stackx
-		ELSE
-		subq.w	#2,d5
-		ror.w	#8,d6
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$40(a3),a0
 		move.l	a3,z80_pc_base				;rom base.
@@ -1357,13 +1356,7 @@ irq_i:		bclr.b	#0,(a6)
 		cnop	0,4
 irq_ii:		bclr.b	#1,(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_d6_stackx
-		ELSE
-		subq.w	#2,d5
-		ror.w	#8,d6
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$48(a3),a0
 		move.l	a3,z80_pc_base				;rom base.
@@ -1373,13 +1366,7 @@ irq_ii:		bclr.b	#1,(a6)
 		cnop	0,4
 irq_iii:	bclr.b	#2,(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_d6_stackx
-		ELSE
-		subq.w	#2,d5
-		ror.w	#8,d6
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$50(a3),a0
 		move.l	a3,z80_pc_base				;rom base.
@@ -1389,13 +1376,7 @@ irq_iii:	bclr.b	#2,(a6)
 		cnop	0,4
 irq_iv:		bclr.b	#3,(a6)
 
-		IFEQ	Z80_MODE
 		bsr.w	write_d6_stackx
-		ELSE
-		subq.w	#2,d5
-		ror.w	#8,d6
-		move.w	d6,(a2,d5.l)
-		ENDIF
 
 		lea	$58(a3),a0
 		move.l	a3,z80_pc_base				;rom base.

@@ -68,6 +68,17 @@ gadgets_y		=25
 font_y_sub		=11
 iff_y			=20
 
+palette_background_x	=120
+palette_sprite_x	=350
+palette_box_width	=200
+palette_reset_width	=60
+palette_interp_width	=110
+palette_button_gap	=10
+palette_button_inset	=(palette_box_width-palette_reset_width-palette_interp_width-palette_button_gap)/2
+palette_button_y	=26-font_y_sub
+palette_interp_offset	=palette_button_inset+palette_reset_width+palette_button_gap
+palette_components	=8*3
+
 menu_idcmp		=IDCMP_GADGETUP!IDCMP_GADGETDOWN!IDCMP_CLOSEWINDOW!IDCMP_MOUSEMOVE!IDCMP_MOUSEBUTTONS
 menu_flags		=WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_DRAGBAR!WFLG_ACTIVATE!WFLG_SMART_REFRESH!WFLG_GIMMEZEROZERO
 
@@ -167,11 +178,7 @@ gb_emu:		movem.l	d2-d7/a2-a6,-(SP)		;stack!
 		lea	gameboy_colours,a0
 		lea	colours_dat,a1
 		moveq.l	#8-1,d0
-convert_colours:move.b	1(a0),(a1)+
-		move.b	2(a0),(a1)+
-		move.b	3(a0),(a1)+
-		addq.l	#4,a0
-		dbra	d0,convert_colours
+		bsr.w	copy_default_colours
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		center the window
@@ -589,22 +596,19 @@ get_message:	move.l	dos_base,a6
 ;		message from the menu window
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_message:	move.l	exec_base,a6
-		move.l	d0,a0
-		move.l	im_Class(a0),d0
-
-		cmp.l	#IDCMP_CLOSEWINDOW,d0
-		beq.s	menu_quit
-
-		move.l	im_IAddress(a0),d1		;address of a gadget.
+menu_message:	move.l	d0,a1
+		move.l	im_Class(a1),d0
+		move.l	im_IAddress(a1),d1
 		moveq.l	#0,d2
-		move.w	im_Code(a0),d2			;menu id data.
+		move.w	im_Code(a1),d2
 
 		movem.l	d0-d2,-(SP)
-		move.l	a0,a1				;a1 = message.
-		jsr	ReplyMsg(a6)			;reply to it.
+		move.l	gad_tools_base,a6
+		jsr	_LVOGT_ReplyIMsg(a6)
 		movem.l	(SP)+,d0-d2
 
+		cmp.l	#IDCMP_CLOSEWINDOW,d0
+		beq.w	quit
 		cmp.l	#IDCMP_GADGETUP,d0
 		beq.s	menu_buttons
 		cmp.l	#IDCMP_MOUSEMOVE,d0
@@ -612,30 +616,35 @@ menu_message:	move.l	exec_base,a6
 
 		bra.w	get_message
 
-menu_quit:	move.l	a0,a1				;a1 = message.
-		jsr	ReplyMsg(a6)			;reply to it.
-		bra.w	quit
-
-menu_buttons:	moveq.l	#0,d0
+menu_buttons:	tst.l	d1
+		beq.w	get_message
+		moveq.l	#0,d0
 		move.l	d1,a0
-		move.w	gg_GadgetID(a0),d0		;d0 = gadget id.
-		sub.b	#24,d0
+		move.w	gg_GadgetID(a0),d0
+		sub.w	#palette_components,d0
+		lsl.l	#2,d0
+		cmp.l	#menu_jump_tbl_end-menu_jump_tbl,d0
+		bhs.w	get_message
 		lea	menu_jump_tbl,a0
-		jmp	([a0,d0.l*4])
+		jmp	([a0,d0.l])
 
-menu_sliders:	moveq.l	#0,d0
-		move.l	d1,a0
-		move.w	gg_GadgetID(a0),d0		;d0 = gadget id.
+menu_sliders:	tst.l	d1
+		beq.w	get_message
+		cmp.w	#255,d2
+		bhi.w	get_message
+		; Plain mouse moves need not carry a gadget pointer.
+		lea	colour_1_r,a0
+		moveq.l	#0,d0
+menu_find_slider:
+		cmp.l	(a0)+,d1
+		beq.s	menu_slider_found
+		addq.l	#1,d0
+		cmp.w	#palette_components,d0
+		blo.s	menu_find_slider
+		bra.w	get_message
 
-		move.l	d0,-(SP)
-		move.l	gad_tools_base,a6
-		move.l	menu_ptr,a1
-		sub.l	a2,a2
-		lea	get_gadget_attrs_tag_list,a3
-		jsr	GT_GetGadgetAttrsA(a6)
-		move.l	(SP)+,d0
-
-		move.l	get_gadget_attrs_tag_return,d1
+menu_slider_found:
+		move.l	d2,d1				;GadTools supplies the slider level in im_Code.
 		lea	colours_dat,a0
 		cmp.b	(a0,d0.l),d1
 		beq.w	get_message
@@ -1107,8 +1116,8 @@ menu_jump_tbl:	dc.l	prefs_load
 		dc.l	cfg_load
 		dc.l	cfg_save
 		dc.l	obtain_from_wzonka_lad
-		dc.l	interpolate_back_ground
 		dc.l	interpolate_sprites
+		dc.l	interpolate_background
 
 		dc.l	copy_left_1
 		dc.l	copy_right_1
@@ -1120,6 +1129,9 @@ menu_jump_tbl:	dc.l	prefs_load
 		dc.l	copy_right_4
 
 		dc.l	iff_load
+		dc.l	reset_background_colours
+		dc.l	reset_sprite_colours
+menu_jump_tbl_end:
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		obtain new colours from wzonka-lad
@@ -1337,47 +1349,37 @@ copy_right_4:	moveq.l	#3,d7
 		bra.w	copy_right
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		copy left
+;		copy a colour between the two palettes
 ;		INPUT:
-;		d7	= number of colour.
+;		d7	= row (0-3).
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-copy_left:	lea	pen_list,a4
-		move.l	(a4),pen_storage_list		;save the pens.
-		move.l	4(a4),pen_storage_list+4		
+copy_left:	move.l	d7,d1
+		addq.l	#4,d1
+		bra.s	copy_colour
 
-		lea	colours_dat,a0
-		move.l	d7,d1
+copy_right:	move.l	d7,d1
+		addq.l	#4,d7
+
+copy_colour:	lea	colours_dat,a0
+		move.l	d7,d2
+		mulu.w	#3,d2
+		lea	(a0,d2.l),a3			;destination RGB.
 		mulu.w	#3,d1
-		lea	(a0,d1.l),a3
-		add.l	#3*4,d1
 		add.l	d1,a0
-		move.w	(a0)+,(a3)
-		move.b	(a0),2(a3)
+		move.w	(a0),d0
+		move.b	2(a0),d1
+		cmp.w	(a3),d0
+		bne.s	copy_colour_changed
+		cmp.b	2(a3),d1
+		beq.w	get_message			;identical RGB: keep the current pen and preview.
 
-		bra.s	remap_one_colour
-
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		copy right
-;		INPUT:
-;		d7	= number of colour.
-;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-
-copy_right:	lea	pen_list,a4
-		move.l	(a4),pen_storage_list		;save the pens.
-		move.l	4(a4),pen_storage_list+4		
-
-		lea	colours_dat,a0
-		move.l	d7,d1
-		mulu.w	#3,d1
-		lea	(a0,d1.l),a3
-		add.l	#3*4,d1
-		add.l	d1,a0
-		move.w	(a3),(a0)+
-		move.b	2(a3),(a0)
-
-		add.b	#4,d7
-		bra.s	remap_one_colour
+copy_colour_changed:
+		move.w	d0,(a3)
+		move.b	d1,2(a3)
+		lea	pen_list,a4
+		move.l	(a4),pen_storage_list
+		move.l	4(a4),pen_storage_list+4
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		remap only one colour
@@ -1548,10 +1550,34 @@ encode_four_colours_number:
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
-;		interpolate colours
+;		reset one palette to its default colours
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-interpolate_back_ground:
+reset_background_colours:
+		lea	gameboy_colours,a0
+		lea	colours_dat,a1
+		bra.s	reset_palette_colours
+
+reset_sprite_colours:
+		lea	gameboy_colours+4*4,a0
+		lea	colours_dat+4*3,a1
+reset_palette_colours:
+		moveq.l	#4-1,d0
+		bsr.s	copy_default_colours
+		bsr.w	obtain_colours_apply_list
+		bra.w	get_message
+
+copy_default_colours:
+		move.b	1(a0),(a1)+
+		move.b	2(a0),(a1)+
+		move.b	3(a0),(a1)+
+		addq.l	#4,a0
+		dbra	d0,copy_default_colours
+		rts
+
+;		interpolate colours
+
+interpolate_sprites:
 		moveq.l	#4,d0
 		bra.s	interpolate_colours
 
@@ -1559,9 +1585,8 @@ interpolate_back_ground:
 ;		interpolate colours
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-interpolate_sprites:
+interpolate_background:
 		moveq.l	#0,d0
-;		bra.s	interpolate_colours
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 ;		interpolate colours
@@ -2488,7 +2513,7 @@ menu_window:	dc.w	0
 		dc.w	menu_y
 		dc.w	WBENCHSCREEN
 
-menu_title:	dc.b	"Wzonka-Lad Palette Editor 1.10 (68020) Written by Ville Helin 1997-99",0
+menu_title:	dc.b	"Wzonka-Lad Palette Editor 1.11 (68020) Written by Ville Helin 1997-99",0
 		even
 
 univ_gadget:	dc.l	0
@@ -2501,6 +2526,10 @@ menu_b_5:	dc.l	0
 menu_b_interpolate_background:
 		dc.l	0
 menu_b_interpolate_sprites:
+		dc.l	0
+menu_b_reset_background:
+		dc.l	0
+menu_b_reset_sprites:
 		dc.l	0
 menu_b_iff_load:dc.l	0
 
@@ -2552,6 +2581,8 @@ menu_save:	dc.b	"Save",0
 		even
 menu_obtain:	dc.b	"Obtain",0
 		even
+menu_reset:	dc.b	"Reset",0
+		even
 menu_interpolate:
 		dc.b	"Interpolate",0
 		even
@@ -2578,7 +2609,7 @@ context_g_menu:	dc.l	0
 ;		menu gadgets
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-menu_scr_txt:	dc.b	"Wzonka-Lad Palette Editor 1.10",0
+menu_scr_txt:	dc.b	"Wzonka-Lad Palette Editor 1.11",0
 		even
 
 menu_gadgets:	dc.w	180,50-font_y_sub
@@ -2837,20 +2868,36 @@ menu_gadgets:	dc.w	180,50-font_y_sub
 		dc.w	60,14
 		dc.l	menu_b_5
 
-		dc.w	405,26-font_y_sub
+		dc.w	palette_sprite_x+palette_button_inset,palette_button_y
+		dc.l	PLACETEXT_IN
+		dc.l	menu_reset
+		dc.w	41
+		dc.w	0				;button_kind!
+		dc.w	palette_reset_width,14
+		dc.l	menu_b_reset_sprites
+
+		dc.w	palette_sprite_x+palette_interp_offset,palette_button_y
 		dc.l	PLACETEXT_IN
 		dc.l	menu_interpolate
 		dc.w	29
 		dc.w	0				;button_kind!
-		dc.w	110,14
+		dc.w	palette_interp_width,14
 		dc.l	menu_b_interpolate_sprites
 
-		dc.w	175,26-font_y_sub
+		dc.w	palette_background_x+palette_button_inset,palette_button_y
+		dc.l	PLACETEXT_IN
+		dc.l	menu_reset
+		dc.w	40
+		dc.w	0				;button_kind!
+		dc.w	palette_reset_width,14
+		dc.l	menu_b_reset_background
+
+		dc.w	palette_background_x+palette_interp_offset,palette_button_y
 		dc.l	PLACETEXT_IN
 		dc.l	menu_interpolate
 		dc.w	30
 		dc.w	0				;button_kind!
-		dc.w	110,14
+		dc.w	palette_interp_width,14
 		dc.l	menu_b_interpolate_background
 
 		dc.w	321,57-font_y_sub
@@ -3127,7 +3174,7 @@ back_pattern_map_attr:
 ;		the version string
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-version_data:	dc.b	"$VER: Wzonka-Lad Palette Editor 1.10 (25.05.99)",0
+version_data:	dc.b	"$VER: Wzonka-Lad Palette Editor 1.11 (28.11.2026)",0
 		even
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -3139,8 +3186,8 @@ menu_bevel_list:dc.w	22+gadgets_x,35+iff_y+gadgets_y-font_y_sub,76,39
 		dc.w	22+gadgets_x,133+iff_y+gadgets_y-font_y_sub,76,24
 		dc.w	22+gadgets_x,21+gadgets_y-font_y_sub,76,24
 
-		dc.w	120,21-font_y_sub,200,200
-		dc.w	350,21-font_y_sub,200,200
+		dc.w	palette_background_x,21-font_y_sub,palette_box_width,200
+		dc.w	palette_sprite_x,21-font_y_sub,palette_box_width,200
 		dc.w	0
 
 bevel_box_tags:	dc.l	GT_VisualInfo,0
@@ -3232,15 +3279,8 @@ conversion_occurred:
 ;		colours
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
-colours_dat:	ds.b	8*3
+colours_dat:	ds.b	palette_components
 		even
-
-get_gadget_attrs_tag_list:
-		dc.l	GTSL_Level,get_gadget_attrs_tag_return
-		dc.l	TAG_END,0
-
-get_gadget_attrs_tag_return:
-		dc.l	0
 
 set_gadget_attrs_tag_list:
 		dc.l	GTSL_Level,0

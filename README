@@ -24,6 +24,10 @@ I take no responsibility for anything.
 
 v1.13.00 (28-Nov-2026):
 
+* Overlapping sprites now follow DMG priority in all graphics modes:
+  the leftmost sprite wins, with earlier OAM entries breaking ties.
+  A winning sprite with the behind-background flag set is hidden by
+  nonzero background or window pixels, but still blocks other sprites.
 * The Palette Editor can reset background and sprite colours independently
   to their built-in defaults.
 * The Palette Editor now replies to GadTools events correctly and ignores

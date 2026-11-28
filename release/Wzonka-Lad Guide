@@ -1023,7 +1023,12 @@
 
   v1.13.00 (28-Nov-2026):
   
-    * 
+    * All graphics modes now use DMG sprite overlap order: the leftmost
+      opaque sprite wins, with earlier OAM entries breaking ties. If that
+      sprite is marked behind the background, background and window colour
+      indices 1-3 hide it (even if mapped to the same shade as index 0).
+      A hidden winner still blocks lower-priority sprites. The ten-sprites-
+      per-scanline limit is still not emulated.
 
   v1.12.00 (25-Nov-2026):
 
@@ -1206,7 +1211,7 @@
     * Powering the APU off clears envelope and sweep state, so the channel
       stays silent
     * Sprite drawing optimizations
-    * Window mode obeys now "OS screen speed limit" setting)
+    * Window mode obeys now "OS screen speed limit" setting
 
   v1.01.00 (14-Aug-1999)
     * Wzonka-Lad doesn't check the ID area in a ROM dump file,

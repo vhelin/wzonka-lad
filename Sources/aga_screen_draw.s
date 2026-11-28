@@ -183,28 +183,10 @@ screen_aga_bg:	move.l	d7,d0				;d0 = lcd control byte.
 
 		cnop	0,4
 screen_aga_colu:movem.l	d6/d7/a0,-(SP)
-		moveq.l	#8/2-1,d6
-		move.w	d2,d3
-		add.b	(a1,d7.l),d3			;d3 = left tile.
-		move.l	a0,a4				;a4 = data out.
+		bsr.w	screen_aga_margin
 		addq.b	#1,d7
-		lsl.w	#4,d3				;d3 = d3 * 16.
 		and.b	#%11111,d7
-		lea	(a2,d3.w),a3			;a3 = data in.
-		addq.l	#1,a0				;next x (after next loop).
-
-screen_aga_pack_margin: MACRO
-		move.w	(a3)+,d4
-		move.b	d4,\2
-		lsr.w	#8,d4
-		move.b	d4,\1
-		ENDM
-
-screen_aga_bdat: screen_aga_pack_margin (a4),40(a4)
-		screen_aga_pack_margin 320(a4),360(a4)
-		add.l	#2*40*8,a4
-		dbra	d6,screen_aga_bdat		;next pair of rows.
-
+		addq.l	#1,a0
 		moveq.l	#(160/8)/4-1,d1			;x.
 ; Tile offsets fit in a positive word (0..4080); ignore packed pixels in d3's high word.
 screen_aga_rows:move.w	d2,d3
@@ -272,6 +254,12 @@ screen_aga_skip_block:
 screen_aga_next_block:
 		dbra	d1,screen_aga_rows		;next four blocks.
 
+		; Fine scrolling exposes part of the next tile at the right edge.
+		move.l	aga_ro_inactive,a4
+		cmp.b	#8,(a4)
+		beq.s	screen_aga_colu_next
+		bsr.s	screen_aga_margin
+screen_aga_colu_next:
 		movem.l	(SP)+,d6/d7/a0
 		add.l	#8*8*40,a0			;next y.
 		addq.b	#1,d6				;       (register).
@@ -284,6 +272,26 @@ screen_aga_next_block:
 		cnop	0,4
 screen_aga_tup:	sub.l	#32*31,a1			;back to the beginning.
 		dbra	d0,screen_aga_colu		;next 168x8 line.
+		rts
+
+screen_aga_pack_margin: MACRO
+		move.w	(a3)+,d4
+		move.b	d4,\2
+		lsr.w	#8,d4
+		move.b	d4,\1
+		ENDM
+
+screen_aga_margin:
+		moveq.l	#8/2-1,d6
+		move.w	d2,d3
+		add.b	(a1,d7.l),d3
+		lsl.w	#4,d3
+		lea	(a2,d3.w),a3
+		move.l	a0,a4
+screen_aga_bdat:	screen_aga_pack_margin (a4),40(a4)
+		screen_aga_pack_margin 320(a4),360(a4)
+		add.l	#2*40*8,a4
+		dbra	d6,screen_aga_bdat
 		rts
 
 screen_aga_bg_cache_begin:
@@ -482,11 +490,12 @@ screen_aga_sprs_draw:
 		btst	#1,d1				;sprites off?
 		beq.w	aga_spr_exit			;yes.
 
-		move.l	gb_memory,a0
-		move.l	a0,a1
-		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
+		move.l	gb_memory,a1
+		bsr.w	spr_order_frame
+		moveq.l	#3,d3
+		bsr.w	spr_priority_prepare
+		bmi.w	aga_spr_exit
 		add.l	#$8000,a1			;a1 = sprite pattern table.
-		moveq.l	#40-1,d0			;d0 = number of sprites.
 		move.l	x_flip_table,a2			;        .
 
 		btst	#2,d1				;sprite size?
@@ -508,13 +517,6 @@ aspr_n8x16:	move.l	#16-1,sprite_y
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 aspr_c8xq:	move.l	-(a0),d1			;d1 = y.B, x.B, gfx.B, flags.B.
-		move.l	d1,d2
-		swap	d2
-		tst.b	d2
-		beq.w	aspr_xit
-		lsr.w	#8,d2
-		beq.w	aspr_xit
-
 aspr_xcute:	swap	d1				;d1 = gfx.B, flags.B, y.B, x.B.
 		move.l	bg_scroll_x,d2			;x start (bg scroll pixels).
 		add.b	d1,d2				;d2 = x.B.
@@ -591,6 +593,7 @@ aga_spr_merge_row: MACRO
 		cnop	0,4
 aga_spr_normal:	move.w	(a6)+,d3
 		beq.s	aga_spr_nx			;empty data.
+		spr_priority_filter aga_spr_nx
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -627,6 +630,7 @@ aga_spr_x:	moveq.l	#0,d3
 aga_spr_xz:	move.w	(a6)+,d3
 		beq.s	aga_spr_xx			;empty data.
 		move.w	(a2,d3.l*2),d3			;x flipped data.
+		spr_priority_filter aga_spr_xx
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -673,6 +677,7 @@ aga_spr_y:	move.l	d7,d4
 		cnop	0,4
 aga_spr_yz:	move.w	-(a6),d3
 		beq.s	aga_spr_ny			;empty data.
+		spr_priority_filter aga_spr_ny
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.
@@ -709,6 +714,7 @@ aga_spr_xy:	moveq.l	#0,d3
 aga_spr_xyz:	move.w	-(a6),d3
 		beq.s	aga_spr_xyx			;empty data.
 		move.w	(a2,d3.l*2),d3			;x flipped data.
+		spr_priority_filter aga_spr_xyx
 
 		move.b	d3,d4				;d4 = 01.
 		clr.b	d3				;d3 = 0x.

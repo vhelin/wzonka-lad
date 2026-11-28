@@ -52,6 +52,25 @@ spr_col_page:	MACRO
 		lea	(a2,d3.l),a2
 		ENDM
 
+spr_priority_filter: MACRO
+		tst.b	spr_priority_mode
+		beq.s	spr_priority_skip\@
+		bsr.w	spr_priority_row
+		tst.w	d3
+		beq.w	\1
+spr_priority_skip\@:
+		ENDM
+
+spr_priority_filter_scan: MACRO
+		tst.b	spr_priority_mode
+		beq.s	spr_priority_skip_scan\@
+		move.w	d7,d3
+		bsr.w	spr_priority_row
+		move.w	d3,d7
+		beq.w	\1
+spr_priority_skip_scan\@:
+		ENDM
+
 screen_draw:	tst.b	old_render			;aga?
 		beq.w	aga_screen_draw			;yes.
 
@@ -710,6 +729,311 @@ win_span_aligned_long:
 ;		do the sprites
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
+; A1 = guest VRAM base. As in the frame renderers, skip X=0 or Y=0.
+spr_order_frame:
+		move.l	a1,a0
+		add.l	#$fe00,a0
+		lea	spr_pick,a6
+		moveq.l	#0,d2
+		moveq.l	#40-1,d0
+spr_order_pick:
+		tst.b	(a0)
+		beq.s	spr_order_skip
+		tst.b	1(a0)
+		beq.s	spr_order_skip
+		move.l	(a0)+,(a6)+
+		addq.l	#1,d2
+		dbra	d0,spr_order_pick
+		bra.s	spr_order_by_x
+spr_order_skip:
+		addq.l	#4,a0
+		dbra	d0,spr_order_pick
+
+; D2 = count, A6 = end of the OAM-ordered picks.
+; Stable ascending X; drawing backwards makes smaller X and earlier OAM win.
+; Returns A0 = end, D0 = count - 1 (N if empty).
+spr_order_by_x:
+		move.l	a6,a0
+		move.l	d2,d0
+		subq.w	#1,d0
+		ble.s	spr_order_done
+		lea	spr_pick,a6
+		lea	4(a6),a4
+spr_order_next:
+		move.b	1(a4),d3
+		cmp.b	-3(a4),d3
+		bhs.s	spr_order_advance
+		move.l	(a4),d7
+		move.l	a4,a5
+spr_order_shift:
+		move.l	-4(a5),(a5)
+		subq.l	#4,a5
+		cmpa.l	a6,a5
+		beq.s	spr_order_insert
+		cmp.b	-3(a5),d3
+		blo.s	spr_order_shift
+spr_order_insert:
+		move.l	d7,(a5)
+spr_order_advance:
+		addq.l	#4,a4
+		cmpa.l	a0,a4
+		blo.s	spr_order_next
+		tst.w	d0
+spr_order_done:
+		rts
+
+; Only passes with an enabled backdrop and a priority OBJ need a coverage
+; map. Reverse the picks so the existing backwards readers draw front first.
+; The map uses OAM X coordinates with a 24-byte stride (including margins).
+; D3 = 1/2 for planar frame/line, 3/4 for AGA frame/line.
+spr_priority_prepare:
+		clr.b	spr_priority_mode
+		tst.w	d0
+		bmi.s	spr_priority_ready
+		move.l	lcd_control,d6
+		btst	#0,d6
+		beq.s	spr_priority_ready
+		lea	spr_pick,a4
+		move.w	d0,d6
+spr_priority_find:
+		tst.b	3(a4)
+		bmi.s	spr_priority_enable
+		addq.l	#4,a4
+		dbra	d6,spr_priority_find
+spr_priority_ready:
+		tst.w	d0
+		rts
+spr_priority_enable:
+		move.b	d3,spr_priority_mode
+		lea	spr_pick,a4
+		lea	-4(a0),a5
+spr_priority_reverse:
+		cmpa.l	a5,a4
+		bhs.s	spr_priority_clear
+		move.l	(a4),d7
+		move.l	(a5),(a4)+
+		move.l	d7,(a5)
+		subq.l	#4,a5
+		bra.s	spr_priority_reverse
+spr_priority_clear:
+		lea	spr_priority_claims,a4
+		move.w	#24/4-1,d6
+		btst	#0,d3
+		beq.s	spr_priority_clear_loop
+		move.w	#144*24/4-1,d6
+spr_priority_clear_loop:
+		clr.l	(a4)+
+		dbra	d6,spr_priority_clear_loop
+		bra.s	spr_priority_ready
+
+; D3.W = sprite pattern after X flip. A0 points to its OAM entry.
+; Claim opaque pixels before testing the backdrop: a hidden winner must
+; still block lower-priority sprites. Unclaimed backdrop pixels are raw.
+spr_priority_row:
+		movem.l	d0-d2/d4-d7/a1-a4,-(sp)
+		moveq.l	#0,d1
+		move.b	1(a0),d1
+		beq.w	spr_priority_return
+		cmp.w	#168,d1
+		bhs.w	spr_priority_return
+		moveq.l	#0,d2
+		move.b	spr_priority_mode,d2
+		lea	spr_priority_claims,a2
+		btst	#0,d2
+		beq.s	spr_priority_line
+		moveq.l	#0,d0
+		move.b	(a0),d0
+		add.w	sprite_y+2,d0
+		sub.w	d7,d0
+		sub.w	#16,d0
+		cmp.w	#144,d0
+		bhs.w	spr_priority_return
+		move.w	d0,d4
+		mulu.w	#24,d4
+		add.l	d4,a2
+		bra.s	spr_priority_x
+spr_priority_line:
+		move.l	gb_scanlines,d0
+spr_priority_x:
+		move.w	d1,d4
+		lsr.w	#3,d4
+		add.w	d4,a2
+		moveq.l	#7,d5
+		and.w	d1,d5
+		move.w	(a2),d7
+		lsl.w	d5,d7
+		lsr.w	#8,d7
+		move.w	d3,d4
+		lsr.w	#8,d4
+		or.b	d3,d4
+		lsl.w	#8,d4
+		lsr.w	d5,d4
+		or.w	d4,(a2)
+
+		tst.b	3(a0)
+		bpl.w	spr_priority_keep
+		cmp.b	#2,d2
+		beq.s	spr_priority_planar_line
+		cmp.b	#1,d2
+		bne.s	spr_priority_aga
+		move.l	bitmap_bg,a3
+		move.w	d0,d4
+		add.w	bg_scroll_y+2,d4
+		add.w	#16,d4
+		mulu.w	#24,d4
+		add.l	d4,a3
+		move.w	d1,d4
+		add.w	bg_scroll_x+2,d4
+		bra.s	spr_priority_read_bg
+spr_priority_planar_line:
+		move.l	bitmap_bg,a3
+		move.w	d0,d4
+		mulu.w	#20,d4
+		add.l	d4,a3
+		move.w	d1,d4
+		subq.w	#8,d4
+		bmi.s	spr_priority_left
+		cmp.w	#152,d4
+		blo.s	spr_priority_read_bg
+		move.b	19(a3),d6
+		or.b	2880+19(a3),d6
+		and.w	#7,d4
+		lsl.b	d4,d6
+		bra.s	spr_priority_bg_ready
+spr_priority_left:
+		neg.w	d4
+		move.b	(a3),d6
+		or.b	2880(a3),d6
+		lsr.b	d4,d6
+		bra.s	spr_priority_bg_ready
+spr_priority_aga:
+		move.l	aga_map_inactive,a3
+		move.l	gb_memory,a4
+		add.l	#$ff40,a4
+		move.w	d0,d4
+		cmp.b	#4,d2
+		beq.s	spr_priority_aga_line
+		move.l	bg_scroll_inactive,a2
+		add.w	2(a2),d4
+		add.w	#16,d4
+		addq.l	#1,a3
+spr_priority_aga_line:
+		mulu.w	#320,d4
+		add.l	d4,a3
+		addq.l	#6,a3
+		moveq.l	#7,d4
+		and.b	3(a4),d4
+		add.w	d1,d4
+spr_priority_read_bg:
+		move.w	d4,d6
+		and.w	#7,d4
+		lsr.w	#3,d6
+		move.w	(a3,d6.w),d5
+		cmp.b	#1,d2
+		beq.s	spr_priority_frame_plane
+		cmp.b	#2,d2
+		beq.s	spr_priority_line_plane
+		lea	40(a3),a3
+		bra.s	spr_priority_read_second
+spr_priority_frame_plane:
+		lea	4224(a3),a3
+		bra.s	spr_priority_read_second
+spr_priority_line_plane:
+		lea	2880(a3),a3
+spr_priority_read_second:
+		or.w	(a3,d6.w),d5
+		lsl.w	d4,d5
+		lsr.w	#8,d5
+		move.b	d5,d6
+		cmp.b	#3,d2
+		bne.s	spr_priority_bg_ready
+		bsr.s	spr_priority_aga_window
+spr_priority_bg_ready:
+		or.b	d6,d7
+spr_priority_keep:
+		not.b	d7
+		move.b	d7,d4
+		lsl.w	#8,d4
+		move.b	d7,d4
+		and.w	d4,d3
+spr_priority_return:
+		movem.l	(sp)+,d0-d2/d4-d7/a1-a4
+		rts
+
+; AGA whole-frame draws the window as hardware sprites. Sample their raw
+; packed rows instead of using the BG playfield under that part of the window.
+; D0 = LY, D1 = OAM X, A4 = LCD registers, D6.B = backdrop mask in/out.
+spr_priority_aga_window:
+		move.l	lcd_control,d4
+		btst	#5,d4
+		beq.s	spr_priority_window_done
+		moveq.l	#0,d4
+		move.b	10(a4),d4
+		sub.w	d4,d0
+		bmi.s	spr_priority_window_done
+		move.b	11(a4),d4
+		cmp.b	#160,d4
+		bhs.s	spr_priority_window_done
+		cmp.b	#6,d4
+		bne.s	spr_priority_window_x
+		addq.b	#1,d4
+spr_priority_window_x:
+		sub.w	d4,d1
+		subq.w	#1,d1			;OAM X - 8 - (WX - 7).
+		cmp.w	#-8,d1
+		ble.s	spr_priority_window_done
+		addq.w	#1,d0
+		lsl.w	#4,d0			;row plus the control words.
+		move.l	aga_spr_inactive_pointer,a1
+		move.l	(a1),a2
+		tst.w	d1
+		bmi.s	spr_priority_window_edge
+		move.w	d1,d4
+		lsr.w	#6,d4
+		lea	(a1,d4.w*4),a1
+		move.l	(a1),a2
+		move.w	d1,d4
+		lsr.w	#3,d4
+		and.w	#7,d4
+		and.w	#7,d1
+		bsr.s	spr_priority_window_byte
+		tst.w	d1
+		beq.s	spr_priority_window_replace
+		move.b	d5,d2
+		lsl.w	#8,d2
+		addq.w	#1,d4
+		cmp.w	#8,d4
+		blo.s	spr_priority_window_next
+		move.l	4(a1),a2
+		moveq.l	#0,d4
+spr_priority_window_next:
+		bsr.s	spr_priority_window_byte
+		move.b	d5,d2
+		lsl.w	d1,d2
+		lsr.w	#8,d2
+		move.b	d2,d5
+spr_priority_window_replace:
+		move.b	d5,d6
+spr_priority_window_done:
+		rts
+spr_priority_window_edge:
+		moveq.l	#0,d4
+		bsr.s	spr_priority_window_byte
+		neg.w	d1
+		lsr.b	d1,d5
+		moveq.l	#-1,d4
+		lsr.b	d1,d4
+		not.b	d4
+		and.b	d4,d6
+		or.b	d5,d6
+		rts
+spr_priority_window_byte:
+		lea	(a2,d0.w),a3
+		move.b	(a3,d4.w),d5
+		lea	8(a3),a3
+		or.b	(a3,d4.w),d5
+		rts
+
 screen_sprites:	move.l	bitmap_spc,a0			;the sprite area.
 		move.l	a0,a1
 		add.l	#gb_screen_x/8*gb_screen_y,a1
@@ -746,11 +1070,12 @@ lines_done:	move.l	lcd_control,d1			;d1 = lcd control byte.
 		btst	#1,d1				;sprites off?
 		beq.w	spr_exit			;yes.
 
-		move.l	gb_memory,a0
-		move.l	a0,a1
-		add.l	#$fe00+40*4,a0			;a0 = sprite attribute table.
+		move.l	gb_memory,a1
+		bsr.w	spr_order_frame
+		moveq.l	#1,d3
+		bsr.w	spr_priority_prepare
+		bmi.w	spr_exit
 		add.l	#$8000,a1			;a1 = sprite pattern table.
-		moveq.l	#40-1,d0			;d0 = number of sprites.
 
 		btst	#2,d1				;sprite size?
 		bne.w	spr_n8x16			;8x16.
@@ -772,13 +1097,6 @@ spr_n8x16:	move.l	#16-1,sprite_y
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
 
 spr_c8xq:	move.l	-(a0),d1			;d1 = y.B, x.B, gfx.B, flags.B.
-		move.l	d1,d2
-		swap	d2
-		tst.b	d2
-		beq.w	empty_sprite
-		lsr.w	#8,d2
-		beq.w	empty_sprite
-
 spr_xcute:	swap	d1				;d1 = gfx.B, flags.B, y.B, x.B.
 		move.l	bg_scroll_x,d2			;x start (bg scroll pixels).
 		add.b	d1,d2				;d2 = x.B.
@@ -836,6 +1154,7 @@ mark_loop:	move.l	#$01010101,(a6)+
 
 spr_c8xq_copy:	move.w	(a6)+,d3			;d3 = 01.
 		beq.w	next_I
+		spr_priority_filter next_I
 		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
@@ -870,7 +1189,7 @@ spr_exit:	rts
 next_I:		add.l	#192/8,a4
 		add.l	#192/8,a5
 		dbra	d7,spr_c8xq_copy		;next y (register).
-empty_sprite:	dbra	d0,spr_c8xq			;next sprite.
+		dbra	d0,spr_c8xq			;next sprite.
 		rts
 
 ;««««««««««««««««««««««««««««««««««««««««««««««»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»
@@ -883,6 +1202,7 @@ spr_c8xq_copyx:	moveq.l	#0,d3
 		move.w	(a6)+,d3			;d3 = 01.
 		beq.s	next_II
 		move.w	(a3,d3.l*2),d3			;d3 = x flipped data.
+		spr_priority_filter next_II
 		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
@@ -935,6 +1255,7 @@ spr_c8xq_flip:	move.l	d7,d4				;d4 = y-1.
 
 spr_c8xq_copyy:	move.w	-(a6),d3			;d3 = 01.
 		beq.s	next_III
+		spr_priority_filter next_III
 		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.
@@ -982,6 +1303,7 @@ spr_c8xq_copyxy:moveq.l	#0,d3
 		move.w	-(a6),d3			;d3 = 01.
 		beq.s	next_IIII
 		move.w	(a3,d3.l*2),d3			;d3 = x flipped data.
+		spr_priority_filter next_IIII
 		spr_col_change
 
 		move.b	d3,d4				;d4 = 01.

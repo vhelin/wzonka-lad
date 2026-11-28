@@ -153,6 +153,12 @@ aga_layer_tile:
 		beq.s	aga_layer_tile_next
 		tst.b	1(a4)
 		beq.s	aga_layer_tile_next
+		tst.b	3(a4)
+		bpl.s	aga_layer_tile_get
+		move.l	lcd_control,d1
+		btst	#0,d1
+		bne.s	aga_layer_priority
+aga_layer_tile_get:
 		moveq.l	#0,d1
 		move.b	2(a4),d1
 		and.b	d4,d1
@@ -180,6 +186,8 @@ aga_layer_reload:
 		move.l	gb_memory,a4
 		add.l	#$fe00,a4
 		bra.w	aga_layer_miss
+aga_layer_priority:
+		clr.b	(a5)				;the raw BG/window is not in this cache key.
 aga_layer_changed:
 		moveq.l	#1,d0
 		rts

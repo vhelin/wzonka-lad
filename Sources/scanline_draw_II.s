@@ -300,11 +300,10 @@ sspr_pick_n:	move.l	(a0)+,d1			;y, x, tile, flags.
 		move.l	d1,(a6)+
 		addq.b	#1,d2			;hardware counts this one.
 		dbra	d0,sspr_pick_n
-sspr_picked:	tst.b	d2
-		beq.w	exit_spr			;nothing on this line.
-		move.l	a6,a0			;draw the last pick first.
-		move.l	d2,d0
-		subq.l	#1,d0
+sspr_picked:	bsr.w	spr_order_by_x
+		moveq.l	#2,d3
+		bsr.w	spr_priority_prepare
+		bmi.w	exit_spr			;nothing on this line.
 		swap	d0
 		move.w	d4,d0
 		swap	d0
@@ -373,7 +372,8 @@ spr_y_back:	lsl.b	#1,d6				;y = y * 2 (for data).
 		btst	#5,d1				;x flipped?
 		bne.w	sspr_c8xq_copyx			;yes.
 
-spr_x_back:	move.l	a6,a4				;a4 = output spr (p0).
+spr_x_back:	spr_priority_filter_scan next_spr
+		move.l	a6,a4				;a4 = output spr (p0).
 		move.l	a3,a5				;a5 = output bg  (p0).
 		cmp.w	#8,d2				;x < 8?
 		blo.s	spr_less_8			;yes.

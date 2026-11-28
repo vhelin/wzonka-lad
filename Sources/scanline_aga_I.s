@@ -35,6 +35,14 @@ wait_donex:	cmp.l	#144,gb_scanlines		;drawing time?
 		cmp.l	gfx_profile_line,d0
 		seq	gfx_profile_aga_sample
 		ENDC
+
+		gfx_aga_line_start
+		bsr.w	scan_aga_bg			;draw the backdrop before priority sprites.
+		gfx_aga_line_end gfx_prof_aga_bg
+		gfx_aga_line_start
+		bsr.w	scan_aga_win			;do the window.
+		gfx_aga_line_end gfx_prof_aga_win
+
 		gfx_aga_line_start
 		clr.b	aga_spr_amount			;zero sprites done.
 		bsr.w	scan_aga_sprs			;do the sprites.
@@ -43,12 +51,6 @@ wait_donex:	cmp.l	#144,gb_scanlines		;drawing time?
 		move.b	aga_spr_amount,(a5)		;set the signal.
 		gfx_aga_line_end gfx_prof_aga_spr
 
-		gfx_aga_line_start
-		bsr.w	scan_aga_bg			;do the background.
-		gfx_aga_line_end gfx_prof_aga_bg
-		gfx_aga_line_start
-		bsr.w	scan_aga_win			;do the window.
-		gfx_aga_line_end gfx_prof_aga_win
 		IFNE	GFX_PROFILE
 		tst.b	gfx_profile_aga_sample
 		beq.s	scan_aga_sample_done
@@ -468,12 +470,12 @@ sspr_aga_pick:	move.l	(a0)+,d1			;y, x, tile, flags.
 		addq.b	#1,d2			;hardware counts this one.
 		dbra	d0,sspr_aga_pick
 sspr_aga_picked:
+		bsr.w	spr_order_by_x
+		moveq.l	#4,d3
+		bsr.w	spr_priority_prepare
 		gfx_aga_part_end gfx_prof_aga_oam
-		tst.b	d2
-		beq.w	aga_spr_exit			;nothing on this line.
-		move.l	a6,a0			;draw the last pick first.
-		move.l	d2,d0
-		subq.l	#1,d0
+		tst.w	d0
+		bmi.w	aga_spr_exit			;nothing on this line.
 		move.l	d4,d6				;d4 = the scanline number.
 		sub.w	#16,d6				;y position fix.
 		move.l	d6,d7
@@ -541,13 +543,13 @@ no_aga_spr_yf:	lsl.b	#1,d6				;y = y * 2 (for data).
 		move.w	(a1,d3.l),d7			;d7 = pattern data.
 		beq.w	aga_next_spr			;empty sprite.
 
-		add.l	#$10000,d0			;one sprite more.
-
 		btst	#5,d1				;x flipped?
 		beq.s	no_aga_spr_xf			;no.
 		move.w	(a3,d7.l*2),d7			;fetch the x flipped data.
 
-no_aga_spr_xf:	move.l	d2,d3
+no_aga_spr_xf:	spr_priority_filter_scan aga_next_spr
+		add.l	#$10000,d0			;one sprite row composited.
+		move.l	d2,d3
 		lsr.b	#3,d3				;d3 = x.B / 8.
 		tst.l	a6
 		beq.s	aga_spr_locate
